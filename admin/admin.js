@@ -50,6 +50,14 @@ function e164(raw) {
   return '+' + d;
 }
 let loginPhone = null;
+// 手機號碼＋密碼（不花錢）；驗證碼每則要錢，只在忘記密碼或還沒設密碼時用（登入後到 App 的「設定」設密碼）
+$('#login-pw').onclick = async () => {
+  $('#login-msg').textContent = '';
+  const { error } = await db.auth.signInWithPassword({ phone: e164($('#login-phone').value), password: $('#login-password').value });
+  if (error) { $('#login-msg').textContent = '手機號碼或密碼錯誤'; return; }
+  await start();
+};
+$('#login-password').onkeydown = (e) => { if (e.key === 'Enter') $('#login-pw').click(); };
 $('#login-send').onclick = async () => {
   const phone = e164($('#login-phone').value);
   $('#login-msg').textContent = '';
