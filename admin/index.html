@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Sniper 管理後台</title>
+  <link rel="stylesheet" href="admin.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+</head>
+<body>
+  <!-- 登入 -->
+  <section id="login" class="login hidden">
+    <div class="login-card">
+      <div class="brand">◎ SNIPER <span>管理後台</span></div>
+      <div id="login-phone-step">
+        <label>手機號碼</label>
+        <input id="login-phone" type="tel" placeholder="0901 234 567" autocomplete="tel">
+        <button id="login-send" class="btn gold">傳送驗證碼</button>
+      </div>
+      <div id="login-code-step" class="hidden">
+        <label>簡訊驗證碼（6 位數）</label>
+        <input id="login-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+        <button id="login-verify" class="btn gold">登入</button>
+        <button id="login-back" class="btn link">換手機號碼</button>
+      </div>
+      <p id="login-msg" class="msg"></p>
+    </div>
+  </section>
+
+  <!-- 後台 -->
+  <section id="app" class="app hidden">
+    <nav class="side">
+      <div class="brand">◎ SNIPER <span>管理後台</span></div>
+      <a href="#/overview" data-page="overview">總覽</a>
+      <a href="#/venues" data-page="venues">球館與員工</a>
+      <a href="#/players" data-page="players">球員</a>
+      <a href="#/flags" data-page="flags">可疑名單</a>
+      <a href="#/disputes" data-page="disputes">比分爭議</a>
+      <a href="#/reports" data-page="reports">檢舉</a>
+      <a href="#/rules" data-page="rules">積分規則與設定</a>
+      <a href="#/ads" data-page="ads">廣告</a>
+      <a href="#/push" data-page="push">推播</a>
+      <div class="side-foot">
+        <div id="me-name" class="muted"></div>
+        <button id="logout" class="btn small">登出</button>
+      </div>
+    </nav>
+    <main id="page" class="page"></main>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="admin.js"></script>
+</body>
+</html>
