@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- 不把網址（含 Zalo 登入碼）透露給其他網站 -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Sniper Billiards</title>
+  <!--
+    Zalo 官方帳號（OA）授權轉接頁：用 Zalo 送登入驗證碼（CLAUDE.md 第 4.A 節）
+    Zalo 規定回傳網址要在驗證過的網域上，所以 Zalo 先轉回這裡，
+    這一頁再把 ?code=…&oa_id=…&state=… 原封不動轉給 Edge Function `zalo-otp`。
+    這一頁不讀、不存任何資料。
+  -->
+  <script>
+    window.location.replace(
+      'https://zcvtqzjgmhsstbyzvuyo.supabase.co/functions/v1/zalo-otp/oa/callback' + window.location.search
+    );
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; }
+  </style>
+</head>
+<body>
+  <p>Đang kết nối Zalo OA… / 正在連結 Zalo 官方帳號… / Linking Zalo OA…</p>
+  <noscript>Vui lòng bật JavaScript. / 請開啟 JavaScript。/ Please enable JavaScript.</noscript>
+</body>
+</html>

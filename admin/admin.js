@@ -404,7 +404,27 @@ async function rules() {
   const get = (k) => rows.find((r) => r.key === k);
   const flagsRow = get('feature_flags');
   const rp = get('ranking_points')?.value ?? { window_months: 12, tiers: {} };
+  const zaloCfg = get('zalo_otp')?.value ?? { template_id: null, param: 'otp' };
+  const zaloStatus = await run(db.rpc('zalo_oa_status'));
+  const zaloResult = { linked: '已連結 Zalo 官方帳號', cancelled: '已取消連結', expired: '連結逾時，請再按一次', failed: '連結失敗，請再試一次' };
+  const zr = new URLSearchParams(location.hash.split('?')[1]).get('zalo');
+  if (zr) { toast(zaloResult[zr] ?? zr, zr !== 'linked'); history.replaceState(null, '', '#/rules'); }
   page().innerHTML = `<h1>積分規則與設定</h1>
+    <h2>登入驗證碼（用 Zalo 傳送）</h2>
+    <div class="form">
+      <div>Zalo 官方帳號：${zaloStatus.linked
+        ? `<span class="pill ok">已連結</span> <span class="hint">OA ${esc(zaloStatus.oa_id ?? '')}，token 更新於 ${fmt(zaloStatus.updated_at)}（每天自動更新）</span>`
+        : '<span class="pill bad">還沒連結</span>'}</div>
+      <div><button class="btn${zaloStatus.linked ? '' : ' gold inline'}" id="zalo-link">${zaloStatus.linked ? '重新連結' : '連結 Zalo 官方帳號'}</button>
+        <span class="hint">會打開 Zalo 授權頁，請用 OA 管理員的 Zalo 按「允許」。</span></div>
+      <div class="row">
+        <div><label>驗證碼範本 ID（Zalo 審核通過後拿到）</label><input id="zalo-tpl" value="${esc(zaloCfg.template_id)}"></div>
+        <div class="shrink"><label>範本參數名稱</label><input id="zalo-param" value="${esc(zaloCfg.param ?? 'otp')}" style="width:120px"></div>
+        <button class="btn gold inline" id="zalo-save">儲存</button>
+      </div>
+      <p class="hint">範本 ID 空白時，App 登入會顯示「目前無法傳送驗證碼」（Zalo 登入不受影響）。</p>
+    </div>
+
     <h2>功能開關</h2>
     <div class="form" id="flags-box">
       ${Object.entries(flagsRow?.value ?? {}).map(([k, v]) => `<label class="switch"><input type="checkbox" data-flagkey="${esc(k)}" ${v ? 'checked' : ''}>
@@ -428,7 +448,7 @@ async function rules() {
 
     <h2>其他參數（進階）</h2>
     <p class="hint">⚠ 等級只升不降，調高等級門檻前請先想清楚（第 5.11 節）。格式是 JSON，存檔前會檢查格式。</p>
-    ${rows.filter((r) => !['feature_flags', 'ranking_points'].includes(r.key)).map((r) => `
+    ${rows.filter((r) => !['feature_flags', 'ranking_points', 'zalo_otp'].includes(r.key)).map((r) => `
       <div class="form" style="margin-bottom:12px">
         <div><b>${esc(CONFIG_NAMES[r.key] ?? r.key)}</b> <span class="muted">（${esc(r.key)}）</span></div>
         <div class="hint">${esc(r.description)}</div>
@@ -462,6 +482,19 @@ async function rules() {
     await run(db.from('app_config').update({ value }).eq('key', 'ranking_points'), '已儲存排名積分');
   };
 
+  $('#zalo-save').onclick = async () => {
+    const value = { ...zaloCfg, template_id: $('#zalo-tpl').value.trim() || null, param: $('#zalo-param').value.trim() || 'otp' };
+    await run(db.from('app_config').update({ value }).eq('key', 'zalo_otp'), '已儲存驗證碼範本');
+  };
+  $('#zalo-link').onclick = async () => {
+    const { data: { session } } = await db.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/zalo-otp/oa/start', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + session?.access_token, apikey: SUPABASE_KEY },
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!out.url) return toast('無法開始連結：' + (out.error ?? res.status), true);
+    location.href = out.url;
+  };
   $('#flags-save').onclick = async () => {
     const value = { ...(flagsRow?.value ?? {}) };
     document.querySelectorAll('[data-flagkey]').forEach((c) => { value[c.dataset.flagkey] = c.checked; });
