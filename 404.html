@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- GitHub Pages 找不到檔案時都回這一頁：/t/<賽事ID> 的公開賽事頁也在這裡（tournament.js 讀資料畫出來）。
+       Zalo／Facebook 抓預覽不會執行 JavaScript，所以預覽卡片是固定的標題和分享圖。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src https://zcvtqzjgmhsstbyzvuyo.supabase.co; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co; style-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Giải đấu bida · Sniper Billiards</title>
+  <meta name="description" content="Xem thông tin giải đấu và đăng ký trong ứng dụng Sniper Billiards.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Sniper Billiards">
+  <meta property="og:title" content="Giải đấu bida trên Sniper Billiards">
+  <meta property="og:description" content="Xem thông tin giải đấu và đăng ký trong ứng dụng Sniper Billiards.">
+  <meta property="og:image" content="https://snipertour.com/brand/cover.png">
+  <meta property="og:image:width" content="1600">
+  <meta property="og:image:height" content="900">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#0F1513">
+  <link rel="icon" href="/brand/icon_512.png">
+  <link rel="stylesheet" href="/t/tournament.css">
+</head>
+<body>
+  <main id="app">
+    <div class="loading" id="loading" aria-live="polite">Đang tải…</div>
+  </main>
+  <script src="/t/tournament.js"></script>
+</body>
+</html>
