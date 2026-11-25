@@ -161,6 +161,15 @@
     const m = location.pathname.match(/^\/t\/([0-9a-fA-F-]{36})\/?$/);
     const id = m && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(m[1]) ? m[1].toLowerCase() : null;
     if (!id) return notFound();
+    // Cloudflare 伺服器已經讀好的資料（functions/t/[[path]].js），不用再讀一次
+    const pre = document.getElementById('t-data');
+    if (pre) {
+      try {
+        const d = JSON.parse(pre.textContent);
+        if (d && d.ok && d.tournament && d.tournament.id === id) return render(d.tournament);
+        if (d && d.notFound) return notFound();
+      } catch (_) { /* 讀不懂就照舊自己讀 */ }
+    }
     try {
       const url = SUPABASE_URL + '/rest/v1/tournaments?select=' + encodeURIComponent(COLUMNS) +
         '&id=eq.' + id + '&status=neq.draft&limit=1';
