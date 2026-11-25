@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.sniperbilliards.sniper_billiards",
+      "sha256_cert_fingerprints": [
+        "2F:86:A8:3D:28:88:A4:1C:76:05:23:29:E4:2F:07:64:61:4F:2D:12:EC:41:18:7B:E3:8E:18:5B:AD:37:E5:36"
+      ]
+    }
+  }
+]
