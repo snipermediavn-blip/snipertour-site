@@ -35,6 +35,16 @@
         <button id="login-verify" class="btn gold">登入</button>
         <button id="login-back" class="btn link">換手機號碼</button>
       </div>
+      <!-- 兩步驟驗證（管理員一定要）：第一次掃 QR code 綁定手機驗證 App，之後每次輸入 6 位數 -->
+      <div id="login-mfa-step" class="hidden">
+        <p id="mfa-intro" class="muted"></p>
+        <div id="mfa-qr"></div>
+        <p id="mfa-secret" class="muted" style="word-break:break-all;font-size:12px"></p>
+        <label>驗證 App 上的 6 位數</label>
+        <input id="mfa-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
+        <button id="mfa-verify" class="btn gold">確認</button>
+        <button id="mfa-cancel" class="btn link">登出</button>
+      </div>
       <p id="login-msg" class="msg"></p>
     </div>
   </section>

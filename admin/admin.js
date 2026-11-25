@@ -92,11 +92,68 @@ async function start() {
     await db.auth.signOut();
     return;
   }
+  // 兩步驟驗證（負責人 2026-11-25）：伺服器只認 aal2 的管理員，這裡先帶使用者完成
+  const { data: aal } = await db.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (aal?.currentLevel !== 'aal2') {
+    await showMfa();
+    return;
+  }
   $('#me-name').textContent = me.display_name || '管理員';
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   route();
 }
+
+// ---------------------------------------------------------------------
+// 兩步驟驗證：第一次綁定手機驗證 App（掃 QR code），之後每次登入輸入 6 位數
+// ---------------------------------------------------------------------
+let mfaFactorId = null;
+async function showMfa() {
+  $('#login').classList.remove('hidden');
+  $('#app').classList.add('hidden');
+  $('#login-phone-step').classList.add('hidden');
+  $('#login-code-step').classList.add('hidden');
+  $('#login-mfa-step').classList.remove('hidden');
+  $('#login-msg').textContent = '';
+  $('#mfa-code').value = '';
+  const { data: f, error } = await db.auth.mfa.listFactors();
+  if (error) { $('#login-msg').textContent = errText(error); return; }
+  const verified = (f?.totp ?? []).find((x) => x.status === 'verified');
+  if (verified) {
+    mfaFactorId = verified.id;
+    $('#mfa-intro').textContent = '請打開手機的驗證 App（Google Authenticator 等），輸入「Sniper 管理後台」的 6 位數。';
+    $('#mfa-qr').innerHTML = '';
+    $('#mfa-secret').textContent = '';
+  } else {
+    // 上次沒完成的綁定先清掉，重新產生
+    for (const x of f?.all ?? []) {
+      if (x.status !== 'verified') await db.auth.mfa.unenroll({ factorId: x.id });
+    }
+    const { data: en, error: e2 } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Sniper 管理後台' });
+    if (e2) { $('#login-msg').textContent = errText(e2); return; }
+    mfaFactorId = en.id;
+    $('#mfa-intro').textContent = '第一次登入要綁定手機：用 Google Authenticator（或其他驗證 App）掃下面的 QR code，再輸入 App 上的 6 位數。之後每次登入都要輸入。';
+    const img = document.createElement('img');
+    img.src = en.totp.qr_code;
+    img.alt = 'QR code';
+    img.style.cssText = 'width:180px;height:180px;background:#fff;padding:8px;border-radius:8px;display:block;margin:8px auto';
+    $('#mfa-qr').innerHTML = '';
+    $('#mfa-qr').appendChild(img);
+    $('#mfa-secret').textContent = '不能掃描時，手動輸入金鑰：' + en.totp.secret;
+  }
+  $('#mfa-code').focus();
+}
+$('#mfa-verify').onclick = async () => {
+  const code = $('#mfa-code').value.replace(/\D/g, '');
+  if (code.length !== 6 || !mfaFactorId) { $('#login-msg').textContent = '請輸入 6 位數'; return; }
+  const { error } = await db.auth.mfa.challengeAndVerify({ factorId: mfaFactorId, code });
+  if (error) { $('#login-msg').textContent = '驗證碼不對或已過期，請看 App 上最新的 6 位數'; return; }
+  $('#login-mfa-step').classList.add('hidden');
+  $('#login-phone-step').classList.remove('hidden');
+  await start();
+};
+$('#mfa-code').onkeydown = (e) => { if (e.key === 'Enter') $('#mfa-verify').click(); };
+$('#mfa-cancel').onclick = async () => { await db.auth.signOut(); location.hash = ''; location.reload(); };
 
 // ---------------------------------------------------------------------
 // 頁面切換
@@ -126,7 +183,49 @@ async function overview() {
       ${card(pendingLevels ?? 0, '待審核的等級申報', true, '#/levels')}
       ${card(o.open_flags, '待處理的可疑名單', true, '#/flags')}${card(o.open_disputes, '待處理的比分爭議', true, '#/disputes')}
       ${card(o.open_reports, '待處理的檢舉', true, '#/reports')}
+    </div>
+    <div id="stats"><p class="muted">營運數據載入中…</p></div>`;
+  await renderStats($('#stats'));
+}
+
+// ---------------------------------------------------------------------
+// 營運數據（負責人 2026-11-25）：近 30 天每天的新增會員、活躍人數、對局、報名（越南時間）
+// 活躍 = 那天打開過 App 的人
+// ---------------------------------------------------------------------
+async function renderStats(el) {
+  const s = await run(db.rpc('admin_stats', { p_days: 30 }));
+  const sum = s.summary;
+  const card = (n, label) => `<div class="card"><div class="num">${Number(n)}</div><div class="label">${label}</div></div>`;
+  // 每天一根長條；滑過去看日期和數字
+  const chart = (key, title) => {
+    const rows = s.daily;
+    const max = Math.max(1, ...rows.map((r) => Number(r[key])));
+    const total = rows.reduce((a, r) => a + Number(r[key]), 0);
+    const bars = rows.map((r) => {
+      const v = Number(r[key]);
+      const h = v === 0 ? 0 : Math.max(4, Math.round((v / max) * 100));
+      const d = String(r.day).slice(5).replace('-', '/');
+      return `<div class="sbar" title="${esc(d)}：${v}"><div style="height:${h}%"></div></div>`;
+    }).join('');
+    const first = String(rows[0]?.day ?? '').slice(5).replace('-', '/');
+    const last = String(rows.at(-1)?.day ?? '').slice(5).replace('-', '/');
+    return `<div class="card schart">
+      <div class="label">${title}</div>
+      <div class="num" style="font-size:22px">${total}<span class="muted" style="font-size:13px;font-weight:400"> 近 30 天合計・最高一天 ${max === 1 && total === 0 ? 0 : max}</span></div>
+      <div class="sbars">${bars}</div>
+      <div class="saxis"><span>${esc(first)}</span><span>${esc(last)}</span></div>
     </div>`;
+  };
+  el.innerHTML = `<h2>營運數據（越南時間）</h2>
+    <div class="cards">
+      ${card(sum.active_today, '今天活躍')}${card(sum.active_7d, '近 7 天活躍')}${card(sum.active_30d, '近 30 天活躍')}
+      ${card(sum.new_7d, '近 7 天新增會員')}${card(sum.tournaments_done_30d, '近 30 天辦完的比賽')}${card(sum.challenges_done_30d, '近 30 天完成的約戰')}
+    </div>
+    <div class="schart-grid">
+      ${chart('active', '每天活躍人數（打開 App）')}${chart('new_members', '每天新增會員')}
+      ${chart('matches', '每天打完的對局')}${chart('registrations', '每天報名')}
+    </div>
+    <p class="muted" style="font-size:13px">活躍 = 那天打開過 App 的人（每天登入經驗值）。滑鼠移到長條上可以看日期和數字。</p>`;
 }
 
 // ---------------------------------------------------------------------
