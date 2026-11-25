@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- GitHub Pages 找不到檔案時都回這一頁：/t/<賽事ID> 的公開賽事頁也在這裡（tournament.js 讀資料畫出來）。
-       Zalo／Facebook 抓預覽不會執行 JavaScript，所以預覽卡片是固定的標題和分享圖。 -->
+  <!-- 找不到檔案時都回這一頁。/t/<賽事ID> 的公開賽事頁也用這一頁當外框：
+       Cloudflare 上由 _worker.js 換成這場的標題、預覽圖並附上資料（回 200）；下面固定的標題和分享圖是備用。 -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; connect-src https://zcvtqzjgmhsstbyzvuyo.supabase.co; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co; style-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
   <meta name="referrer" content="no-referrer">
   <title>Giải đấu bida · Sniper Billiards</title>
