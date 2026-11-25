@@ -242,6 +242,7 @@ async function levels() {
   const status = { pending: '<span class="pill warn">審核中</span>', approved: '<span class="pill ok">通過</span>', rejected: '<span class="pill">退回</span>' };
   page().innerHTML = `<h1>等級審核</h1>
     <p class="muted">球員註冊時自己選的等級。通過才算認證（建立起始實力分、可以報名正式比賽），可以改成別的等級；退回一定要寫原因，球員會收到通知、可以重新申報。也可以請球員到合作球館當面認證。</p>
+    <div id="tg-box" class="form"><span class="muted">Telegram 審核群組載入中…</span></div>
     <p><a href="#/levels">待審核</a>　|　<a href="#/levels?all=1">全部紀錄</a></p>
     <table><tr><th>申報時間</th><th>球員</th><th>所在地區</th><th>申報等級</th><th>${showAll ? '結果' : '給的等級'}</th><th>${showAll ? '備註／原因' : '備註（退回一定要寫）'}</th><th>${showAll ? '審核人' : ''}</th></tr>
       ${list.map((a) => `<tr><td>${fmt(a.created_at)}</td>
@@ -257,6 +258,7 @@ async function levels() {
              <td>${esc(a.note ?? '')}</td><td>${esc(a.reviewer?.display_name ?? '')} ${a.reviewed_at ? fmt(a.reviewed_at) : ''}</td>`}
       </tr>`).join('') || `<tr><td colspan="7" class="muted">${showAll ? '還沒有申報' : '沒有待審核的申報'}</td></tr>`}
     </table>`;
+  telegramPanel().catch((e) => { $('#tg-box').innerHTML = '<span class="msg">' + esc(errText(e)) + '</span>'; });
   const note = (id) => page().querySelector(`[data-note="${id}"]`)?.value.trim() || null;
   page().querySelectorAll('[data-approve]').forEach((b) => (b.onclick = async () => {
     const id = b.dataset.approve;
@@ -270,6 +272,47 @@ async function levels() {
     await run(db.rpc('review_level_application', { p_id: id, p_approve: false, p_level: null, p_note: note(id) }), '已退回');
     levels();
   }));
+}
+
+// Telegram 審核群組（負責人 2026-11-25）：申報會貼到群組，綁定的管理員按「通過／退回」就算審核
+async function telegramPanel() {
+  const box = $('#tg-box');
+  if (!box) return;
+  const st = await run(db.rpc('telegram_status'));
+  const bot = st.bot_username;
+  box.innerHTML = `<div><b>Telegram 審核群組</b>　
+      機器人：${bot ? `<span class="pill ok">@${esc(bot)}</span>` : '<span class="pill bad">還沒設定</span>'}　
+      群組：${st.group_set ? '<span class="pill ok">已設定</span>' : '<span class="pill bad">還沒設定</span>'}　
+      我的 Telegram：${st.me ? `<span class="pill ok">${esc(st.me.telegram_name ?? '已綁定')}</span>` : '<span class="pill bad">還沒綁定</span>'}</div>
+    ${st.admins.length ? `<p class="hint">已綁定的管理員：${st.admins.map((a) => esc((a.display_name || '管理員') + '（' + (a.telegram_name ?? '') + '）')).join('、')}。只有他們按的按鈕才算數。</p>` : ''}
+    <div class="actions">
+      <button class="btn small${bot ? '' : ' gold inline'}" id="tg-setup">${bot ? '重新設定機器人' : '設定機器人'}</button>
+      ${bot ? `<button class="btn small${st.me ? '' : ' gold inline'}" id="tg-link">${st.me ? '重新綁定我的 Telegram' : '綁定我的 Telegram'}</button>` : ''}
+      ${st.me ? '<button class="btn small" id="tg-unlink">解除綁定</button>' : ''}
+    </div>
+    <div id="tg-code"></div>
+    <p class="hint">步驟：① 設定機器人 → ② 綁定我的 Telegram → ③ 把機器人加進審核群組，在群組裡打 <code>/setgroup</code>。之後有人申報等級，群組會收到訊息：按「通過」照申報的等級通過；按「退回」後要「回覆」機器人的訊息寫原因。要改成別的等級，請在這個頁面審核。</p>`;
+  $('#tg-setup').onclick = async () => {
+    const { data: { session } } = await db.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/telegram/setup', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + session?.access_token, apikey: SUPABASE_KEY },
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!out.bot_username) return toast('設定失敗：' + (out.error === 'bot_token_missing' ? '還沒在 Supabase 設定 TELEGRAM_BOT_TOKEN' : (out.error ?? res.status)), true);
+    toast('機器人 @' + out.bot_username + ' 設定完成');
+    telegramPanel();
+  };
+  if ($('#tg-link')) $('#tg-link').onclick = async () => {
+    const code = await run(db.rpc('telegram_link_code'));
+    const url = 'https://t.me/' + encodeURIComponent(bot) + '?start=' + encodeURIComponent(code);
+    $('#tg-code').innerHTML = `<p>用你的 Telegram 打開 <a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a> 按「開始」；
+      或私訊 @${esc(bot)}：<code>/start ${esc(code)}</code>（15 分鐘內有效，用一次就失效）。綁定完重新整理這頁。</p>`;
+  };
+  if ($('#tg-unlink')) $('#tg-unlink').onclick = async () => {
+    if (!confirm('解除綁定後，你在 Telegram 按的審核按鈕就不算數。確定？')) return;
+    await run(db.rpc('telegram_unlink'), '已解除綁定');
+    telegramPanel();
+  };
 }
 
 // ---------------------------------------------------------------------
@@ -401,7 +444,7 @@ async function members() {
   page().innerHTML = `<h1>會員名單</h1>
     <p class="muted">手機號碼屬於個人資料：只在需要聯絡會員時使用，不要轉給其他人。每次匯出都會留下紀錄。</p>
     <div class="row" style="gap:8px;flex-wrap:wrap">
-      <input id="m-q" placeholder="名字（不用打聲調）或手機號碼" style="max-width:320px">
+      <input id="m-q" placeholder="名字（不用打聲調）、手機號碼或 Email" style="max-width:320px">
       <button class="btn gold inline" id="m-search">搜尋</button>
       <button class="btn inline" id="m-export">匯出 Excel</button>
     </div>
@@ -417,7 +460,7 @@ async function members() {
       <table><tr><th>暱稱</th><th>手機號碼</th><th>等級</th><th>地區</th><th>狀態</th><th>Zalo</th><th>認證</th><th>註冊</th><th></th></tr>
       ${list.map((m) => `<tr>
         <td>${esc(m.display_name ?? '（未設定暱稱）')}${m.role === 'admin' ? ' <span class="pill warn">管理員</span>' : ''}</td>
-        <td style="white-space:nowrap">${esc(m.phone ?? '—')}</td>
+        <td style="white-space:nowrap">${esc(m.phone ?? '—')}${m.phone_verified === false ? ' <span class="pill warn">未驗證</span>' : ''}${m.email ? `<div class="hint">${esc(m.email)}</div>` : ''}</td>
         <td>${m.level ? `<span class="badge">${esc(m.level)}</span>` : '—'}</td>
         <td>${m.city ? esc(CITY_ZH[m.city] ?? m.city) : '<span class="muted">—</span>'}</td>
         <td style="white-space:nowrap">${m.status === 'active' ? '<span class="pill ok">正常</span>' : '<span class="pill bad">停權</span>'}</td>
@@ -449,10 +492,12 @@ async function members() {
       return '"' + s.replace(/"/g, '""') + '"';
     };
     const rows = [
-      ['暱稱', '手機號碼', '等級', '地區', '狀態', 'Zalo', '認證時間', '註冊時間'],
+      ['暱稱', '手機號碼', '手機已驗證', 'Email', '等級', '地區', '狀態', 'Zalo', '認證時間', '註冊時間'],
       ...list.map((m) => [
         m.display_name ?? '',
         { phone: m.phone },
+        m.phone_verified === false ? '否（用 Email 註冊）' : '是',
+        m.email ?? '',
         m.level ?? '',
         m.city ? (CITY_ZH[m.city] ?? m.city) : '',
         statusText(m.status),
@@ -707,7 +752,7 @@ const CONFIG_NAMES = {
   home_sections: 'App 首頁區塊與順序',
   bracket: '對戰表',
 };
-const FLAG_NAMES = { zalo_login: 'Zalo 登入', challenges: '約戰' };
+const FLAG_NAMES = { zalo_login: 'Zalo 登入', challenges: '約戰', email_otp: 'Email 驗證碼註冊（Zalo 驗證碼還不能用時的備案；Zalo 好了請關掉）' };
 const TIER_HELP = '比賽分級代碼（weekly = 球館週賽、monthly = 球館月賽、quarterly = 季賽、open = 公開賽），建立比賽時選的分級要和這裡一樣；重要的比賽可以給比較多分。';
 
 async function rules() {
