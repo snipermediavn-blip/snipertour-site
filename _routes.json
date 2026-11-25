@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "include": [
+    "/t",
+    "/t/*"
+  ],
+  "exclude": [
+    "/t/tournament.js",
+    "/t/tournament.css"
+  ]
+}
