@@ -669,6 +669,7 @@ const FLAG_TYPES = {
   upset_losses: '常輸給分數低很多的對手（可能故意輸球）',
   venue_fast_promotions: '這家球館認證的新人很多很快就升級（可能認證給太低）',
   dispute_own_win: '對自己贏的比賽提出爭議（會讓這場暫時不計分）',
+  chat_gambling: '約戰留言提到賭博（已被擋下）',
 };
 const DISC = { '8ball': '8 號球', '9ball': '9 號球', '10ball': '10 號球' };
 async function flags() {
@@ -718,6 +719,7 @@ function flagDetail(f, names = {}) {
     case 'near_cap_no_promotion':
       return `${DISC[d.discipline] ?? d.discipline}：最近 ${d.games} 場賽後分數都在 ${d.threshold} 以上（最低 ${d.min_rating}），仍是 ${d.level} 級`;
     case 'dispute_own_win': return `理由：${d.reason ?? ''}`;
+    case 'chat_gambling': return `留言：「${d.text ?? ''}」`;
     case 'upset_losses': return `近 ${d.days} 天輸給比自己低 ${d.gap} 分以上的對手 ${d.losses} 次`;
     case 'venue_fast_promotions':
       return `${n(d.venue_id)}：近 90 天認證 ${d.verified} 人，${d.fast} 人在 20 場內就靠實力分升級（${(d.players ?? []).map(n).join('、')}）`;
