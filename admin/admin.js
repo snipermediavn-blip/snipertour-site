@@ -20,6 +20,8 @@ const ERRORS = {
   next_match_started: '下一場已經開打，不能改勝負',
   invalid_score: '比分不正確（超過要搶的局數，或兩邊同時搶到）',
   match_not_ready: '這場還不能改比分',
+  not_pending: '這筆已經審核過了',
+  already_verified: '這位球員已經通過認證（可能已在球館當面認證）',
 };
 function errText(e) {
   const m = String(e?.message ?? e ?? '');
@@ -99,7 +101,7 @@ async function start() {
 // ---------------------------------------------------------------------
 // 頁面切換
 // ---------------------------------------------------------------------
-const PAGES = { overview, venues, players, flags, disputes, reports, rules, ads, push };
+const PAGES = { overview, levels, venues, players, flags, disputes, reports, rules, ads, push };
 function route() {
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
@@ -113,6 +115,7 @@ window.addEventListener('hashchange', route);
 // ---------------------------------------------------------------------
 async function overview() {
   const o = await run(db.rpc('admin_overview'));
+  const { count: pendingLevels } = await db.from('level_applications').select('id', { count: 'exact', head: true }).eq('status', 'pending');
   const card = (n, label, alert = false, href = null) =>
     `<div class="card ${alert && n > 0 ? 'alert' : ''}">${href ? `<a href="${href}" style="text-decoration:none;color:inherit">` : ''}
       <div class="num">${n}</div><div class="label">${label}</div>${href ? '</a>' : ''}</div>`;
@@ -120,22 +123,80 @@ async function overview() {
     <div class="cards">
       ${card(o.players, '註冊球員')}${card(o.verified, '已認證')}${card(o.suspended, '停權中')}
       ${card(o.venues, '球館')}${card(o.tournaments_open, '報名中／比賽中的比賽')}${card(o.matches_today, '24 小時內打完的對局')}
+      ${card(pendingLevels ?? 0, '待審核的等級申報', true, '#/levels')}
       ${card(o.open_flags, '待處理的可疑名單', true, '#/flags')}${card(o.open_disputes, '待處理的比分爭議', true, '#/disputes')}
       ${card(o.open_reports, '待處理的檢舉', true, '#/reports')}
     </div>`;
 }
 
 // ---------------------------------------------------------------------
+// 等級審核（負責人 2026-11-24）：球員註冊時自己申報的等級，通過（可改等級）或退回（要寫原因）
+// ---------------------------------------------------------------------
+async function levels() {
+  const showAll = location.hash.includes('all=1');
+  let q = db.from('level_applications')
+    .select('*, player:profiles!level_applications_player_id_fkey(display_name, avatar_url, city, verified_at), reviewer:profiles!level_applications_reviewed_by_fkey(display_name)')
+    .order('created_at', { ascending: !showAll }).limit(300);
+  if (!showAll) q = q.eq('status', 'pending');
+  const list = await run(q);
+  const levelSelect = (id, v) => `<select data-level="${id}">${LEVELS.map((l) => `<option ${l === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const status = { pending: '<span class="pill warn">審核中</span>', approved: '<span class="pill ok">通過</span>', rejected: '<span class="pill">退回</span>' };
+  page().innerHTML = `<h1>等級審核</h1>
+    <p class="muted">球員註冊時自己選的等級。通過才算認證（建立起始實力分、可以報名正式比賽），可以改成別的等級；退回一定要寫原因，球員會收到通知、可以重新申報。也可以請球員到合作球館當面認證。</p>
+    <p><a href="#/levels">待審核</a>　|　<a href="#/levels?all=1">全部紀錄</a></p>
+    <table><tr><th>申報時間</th><th>球員</th><th>所在地區</th><th>申報等級</th><th>${showAll ? '結果' : '給的等級'}</th><th>${showAll ? '備註／原因' : '備註（退回一定要寫）'}</th><th>${showAll ? '審核人' : ''}</th></tr>
+      ${list.map((a) => `<tr><td>${fmt(a.created_at)}</td>
+        <td>${esc(a.player?.display_name || '（還沒取名）')}${a.player?.verified_at ? ' <span class="pill">已認證</span>' : ''}</td>
+        <td>${esc(a.player?.city ?? '—')}</td>
+        <td><span class="badge">${esc(a.requested_level)}</span></td>
+        ${a.status === 'pending' && !showAll
+          ? `<td>${levelSelect(a.id, a.requested_level)}</td>
+             <td><input data-note="${a.id}" placeholder="退回原因或備註" style="width:100%"></td>
+             <td><div class="actions"><button class="btn small gold inline" data-approve="${a.id}">通過</button>
+               <button class="btn small" data-reject="${a.id}">退回</button></div></td>`
+          : `<td>${status[a.status]} ${a.approved_level ? `<span class="badge">${esc(a.approved_level)}</span>` : ''}</td>
+             <td>${esc(a.note ?? '')}</td><td>${esc(a.reviewer?.display_name ?? '')} ${a.reviewed_at ? fmt(a.reviewed_at) : ''}</td>`}
+      </tr>`).join('') || `<tr><td colspan="7" class="muted">${showAll ? '還沒有申報' : '沒有待審核的申報'}</td></tr>`}
+    </table>`;
+  const note = (id) => page().querySelector(`[data-note="${id}"]`)?.value.trim() || null;
+  page().querySelectorAll('[data-approve]').forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.approve;
+    const level = page().querySelector(`[data-level="${id}"]`).value;
+    await run(db.rpc('review_level_application', { p_id: id, p_approve: true, p_level: level, p_note: note(id) }), '已通過，等級 ' + level);
+    levels();
+  }));
+  page().querySelectorAll('[data-reject]').forEach((b) => (b.onclick = async () => {
+    const id = b.dataset.reject;
+    if (!note(id)) { toast('退回請寫原因（球員會看到）', true); return; }
+    await run(db.rpc('review_level_application', { p_id: id, p_approve: false, p_level: null, p_note: note(id) }), '已退回');
+    levels();
+  }));
+}
+
+// ---------------------------------------------------------------------
 // 球館與員工
 // ---------------------------------------------------------------------
+// 越南 34 個省級行政區（和 App 的 lib/core/cities.dart 同一份；資料庫存越南文）
+const CENTRAL_CITIES = [["Hà Nội","河內市"],["Huế","順化市"],["Hải Phòng","海防市"],["Đà Nẵng","峴港市"],["Thành phố Hồ Chí Minh","胡志明市"],["Cần Thơ","芹苴市"]];
+const PROVINCES = [["Cao Bằng","高平省"],["Tuyên Quang","宣光省"],["Điện Biên","奠邊省"],["Lai Châu","萊州省"],["Sơn La","山羅省"],["Lào Cai","老街省"],["Thái Nguyên","太原省"],["Lạng Sơn","諒山省"],["Quảng Ninh","廣寧省"],["Bắc Ninh","北寧省"],["Phú Thọ","富壽省"],["Hưng Yên","興安省"],["Ninh Bình","寧平省"],["Thanh Hóa","清化省"],["Nghệ An","乂安省"],["Hà Tĩnh","河靜省"],["Quảng Trị","廣治省"],["Quảng Ngãi","廣義省"],["Gia Lai","嘉萊省"],["Khánh Hòa","慶和省"],["Đắk Lắk","多樂省"],["Lâm Đồng","林同省"],["Đồng Nai","同奈省"],["Tây Ninh","西寧省"],["Vĩnh Long","永隆省"],["Đồng Tháp","同塔省"],["Cà Mau","金甌省"],["An Giang","安江省"]];
+const CITY_ZH = Object.fromEntries([...CENTRAL_CITIES, ...PROVINCES]);
+let DISTRICTS = []; // 區域（districts 表，上架中的），名稱一律越南文
+
 async function venues() {
-  const list = await run(db.from('venues').select('*').order('name'));
+  const [list, districts] = await Promise.all([
+    run(db.from('venues').select('*').order('name')),
+    run(db.from('districts').select('id, city, name, sort_order').eq('active', true).order('sort_order', { ascending: true })),
+  ]);
+  DISTRICTS = districts ?? [];
+  const dname = Object.fromEntries(DISTRICTS.map((d) => [d.id, d.name]));
   const selected = new URLSearchParams(location.hash.split('?')[1]).get('id');
   page().innerHTML = `<h1>球館與員工</h1>
-    <table><tr><th>球館</th><th>地址</th><th>球檯</th><th>狀態</th><th></th></tr>
-      ${list.map((v) => `<tr><td>${esc(v.name)}</td><td>${esc(v.address)}</td><td>${v.table_count}</td>
+    <table><tr><th>球館</th><th>城市・區域</th><th>地址</th><th>球檯</th><th>狀態</th><th></th></tr>
+      ${list.map((v) => `<tr><td>${esc(v.name)}</td>
+        <td>${v.city ? esc(CITY_ZH[v.city] ?? v.city) + (v.district_id ? '・' + esc(dname[v.district_id] ?? v.district_id) : '') : '<span class="muted">未設定</span>'}</td>
+        <td>${esc(v.address)}</td><td>${v.table_count}</td>
         <td>${v.status === 'active' ? '<span class="pill ok">營業中</span>' : `<span class="pill">${esc(v.status)}</span>`}</td>
-        <td><a class="btn small" href="#/venues?id=${v.id}">編輯／員工</a></td></tr>`).join('') || '<tr><td colspan="5" class="muted">還沒有球館</td></tr>'}
+        <td><a class="btn small" href="#/venues?id=${v.id}">編輯／員工</a></td></tr>`).join('') || '<tr><td colspan="6" class="muted">還沒有球館</td></tr>'}
     </table>
     <div id="venue-edit"></div>`;
   renderVenueForm(list.find((v) => v.id === selected) ?? null);
@@ -151,6 +212,13 @@ function renderVenueForm(v) {
         <div><label>狀態</label><select id="v-status">
           <option value="active">營業中（App 看得到）</option><option value="pending">籌備中</option><option value="inactive">停用</option></select></div>
       </div>
+      <div class="row">
+        <div><label>城市（必填）</label><select id="v-city"><option value="">請選擇</option>
+          <optgroup label="中央直轄市">${CENTRAL_CITIES.map(([vi, zh]) => `<option value="${esc(vi)}">${esc(zh)}（${esc(vi)}）</option>`).join('')}</optgroup>
+          <optgroup label="省">${PROVINCES.map(([vi, zh]) => `<option value="${esc(vi)}">${esc(zh)}（${esc(vi)}）</option>`).join('')}</optgroup>
+        </select></div>
+        <div id="v-district-box"><label>區域（必填）</label><select id="v-district"></select></div>
+      </div>
       <div><label>地址</label><input id="v-address" value="${esc(v?.address)}"></div>
       <div class="row">
         <div><label>緯度（Google 地圖上按右鍵可以複製）</label><input id="v-lat" value="${v?.lat ?? ''}"></div>
@@ -162,10 +230,23 @@ function renderVenueForm(v) {
     </div>
     ${v ? `<h2>員工</h2><div id="staff"></div>` : ''}`;
   if (v) $('#v-status').value = v.status;
+  // 區域：只有有區域清單的城市（目前胡志明市）才顯示、必填；換城市要重選
+  const fillDistricts = (keep) => {
+    const list = DISTRICTS.filter((d) => d.city === $('#v-city').value);
+    $('#v-district-box').classList.toggle('hidden', list.length === 0);
+    $('#v-district').innerHTML = '<option value="">請選擇</option>' +
+      list.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}</option>`).join('');
+    $('#v-district').value = list.some((d) => d.id === keep) ? keep : '';
+  };
+  $('#v-city').value = v?.city ?? '';
+  fillDistricts(v?.district_id);
+  $('#v-city').onchange = () => fillDistricts(null);
   $('#v-save').onclick = async () => {
     const row = {
       name: $('#v-name').value.trim(),
       address: $('#v-address').value.trim() || null,
+      city: $('#v-city').value || null,
+      district_id: $('#v-district').value || null,
       table_count: Number($('#v-tables').value) || 0,
       status: $('#v-status').value,
       lat: $('#v-lat').value ? Number($('#v-lat').value) : null,
@@ -173,6 +254,8 @@ function renderVenueForm(v) {
       hours: $('#v-hours').value.trim() ? { text: $('#v-hours').value.trim() } : null,
     };
     if (!row.name) return toast('請填球館名稱', true);
+    if (!row.city) return toast('請選城市', true);
+    if (DISTRICTS.some((d) => d.city === row.city) && !row.district_id) return toast('請選區域', true);
     if (v) await run(db.from('venues').update(row).eq('id', v.id), '已儲存');
     else await run(db.from('venues').insert(row), '已新增球館');
     location.hash = '#/venues';
@@ -296,12 +379,27 @@ async function playerDetail(id) {
 const FLAG_TYPES = {
   final_forfeit: '決賽棄權',
   handicap_above_level: '讓球等級高於顯示等級（實力分超過自己的等級）',
+  new_player_dominant: '新帳號很快就很強',
+  repeated_pair: '同兩人重複對戰，幾乎都同一人贏',
+  near_cap_no_promotion: '實力分長期貼著等級上限卻沒升級',
+  upset_losses: '常輸給分數低很多的對手（可能故意輸球）',
+  venue_fast_promotions: '這家球館認證的新人很多很快就升級（可能認證給太低）',
+  dispute_own_win: '對自己贏的比賽提出爭議（會讓這場暫時不計分）',
 };
+const DISC = { '8ball': '8 號球', '9ball': '9 號球', '10ball': '10 號球' };
 async function flags() {
   const showAll = location.hash.includes('all=1');
   let q = db.from('suspicious_flags').select('*, player:profiles!suspicious_flags_player_id_fkey(display_name, level)').order('created_at', { ascending: false }).limit(200);
   if (!showAll) q = q.eq('status', 'open');
   const list = await run(q);
+  // 細節裡的對手、球員、球館：換成名字
+  const ids = [...new Set(list.flatMap((f) => [f.detail?.opponent, ...(f.detail?.players ?? [])]).filter(Boolean))];
+  const vids = [...new Set(list.map((f) => f.detail?.venue_id).filter(Boolean))];
+  const [people, venueRows] = await Promise.all([
+    ids.length ? run(db.from('profiles').select('id, display_name').in('id', ids)) : [],
+    vids.length ? run(db.from('venues').select('id, name').in('id', vids)) : [],
+  ]);
+  const names = Object.fromEntries([...people.map((p) => [p.id, p.display_name ?? '（已刪除）']), ...venueRows.map((v) => [v.id, v.name])]);
   page().innerHTML = `<h1>可疑名單</h1>
     <p class="hint">系統只標記，不會自動停權。請判斷後按「沒問題」或「已處理」。
       ${showAll ? '<a href="#/flags">只看待處理</a>' : '<a href="#/flags?all=1">看全部（含已處理）</a>'}</p>
@@ -309,23 +407,38 @@ async function flags() {
       ${list.map((f) => `<tr><td>${fmt(f.created_at)}</td>
         <td>${esc(f.player?.display_name)} ${f.player?.level ? `<span class="badge">${f.player.level}</span>` : ''}</td>
         <td>${esc(FLAG_TYPES[f.flag_type] ?? f.flag_type)}</td>
-        <td class="hint">${esc(flagDetail(f))}</td>
+        <td class="hint">${esc(flagDetail(f, names))}</td>
         <td>${{ open: '<span class="pill warn">待處理</span>', dismissed: '<span class="pill">沒問題</span>', actioned: '<span class="pill ok">已處理</span>' }[f.status]}</td>
         <td>${f.status === 'open' ? `<div class="actions"><button class="btn small" data-flag="${f.id}" data-s="dismissed">沒問題</button>
           <button class="btn small" data-flag="${f.id}" data-s="actioned">已處理</button>
-          <a class="btn small" href="#/players" onclick="setTimeout(()=>playerDetail('${f.player_id}'),300)">看球員</a></div>` : ''}</td></tr>`).join('') ||
+          <a class="btn small" href="#/players" data-player="${f.player_id}">看球員</a></div>` : ''}</td></tr>`).join('') ||
         '<tr><td colspan="6" class="muted">沒有待處理的項目</td></tr>'}
     </table>`;
+  page().querySelectorAll('[data-player]').forEach((a) => (a.onclick = () => setTimeout(() => playerDetail(a.dataset.player), 300)));
   page().querySelectorAll('[data-flag]').forEach((b) => (b.onclick = async () => {
     const { data: { user } } = await db.auth.getUser();
     await run(db.from('suspicious_flags').update({ status: b.dataset.s, reviewed_by: user.id, reviewed_at: new Date().toISOString() }).eq('id', b.dataset.flag), '已更新');
     flags();
   }));
 }
-function flagDetail(f) {
+function flagDetail(f, names = {}) {
   const d = f.detail ?? {};
-  if (f.flag_type === 'handicap_above_level') return `顯示等級 ${d.display_level ?? '?'}，讓球等級 ${d.handicap_level ?? '?'}`;
-  return '';
+  const n = (id) => names[id] ?? '?';
+  switch (f.flag_type) {
+    case 'handicap_above_level': return `顯示等級 ${d.display_level ?? '?'}，讓球等級 ${d.handicap_level ?? '?'}`;
+    case 'new_player_dominant':
+      return d.reason === 'early_championship'
+        ? `拿冠軍前只打過 ${d.prior_games} 場計分對局`
+        : `前 ${d.games} 場計分對局贏了 ${d.wins} 場（${Math.round((d.wins / d.games) * 100)}%）`;
+    case 'repeated_pair': return `近 90 天和 ${n(d.opponent)} 打了 ${d.games} 場，贏了 ${d.wins} 場`;
+    case 'near_cap_no_promotion':
+      return `${DISC[d.discipline] ?? d.discipline}：最近 ${d.games} 場賽後分數都在 ${d.threshold} 以上（最低 ${d.min_rating}），仍是 ${d.level} 級`;
+    case 'dispute_own_win': return `理由：${d.reason ?? ''}`;
+    case 'upset_losses': return `近 ${d.days} 天輸給比自己低 ${d.gap} 分以上的對手 ${d.losses} 次`;
+    case 'venue_fast_promotions':
+      return `${n(d.venue_id)}：近 90 天認證 ${d.verified} 人，${d.fast} 人在 20 場內就靠實力分升級（${(d.players ?? []).map(n).join('、')}）`;
+    default: return '';
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -405,7 +518,7 @@ const CONFIG_NAMES = {
   bracket: '對戰表',
 };
 const FLAG_NAMES = { zalo_login: 'Zalo 登入', challenges: '約戰' };
-const TIER_HELP = '比賽分級代碼（例如 weekly = 球館週賽、monthly = 球館月賽、city = 城市公開賽），建立比賽時選的分級要和這裡一樣。';
+const TIER_HELP = '比賽分級代碼（weekly = 球館週賽、monthly = 球館月賽、quarterly = 季賽、open = 公開賽），建立比賽時選的分級要和這裡一樣；重要的比賽可以給比較多分。';
 
 async function rules() {
   const rows = await run(db.from('app_config').select('*').order('key'));
@@ -442,7 +555,13 @@ async function rules() {
 
     <h2>排名積分（第 5.10 節）</h2>
     <div class="form">
-      <p class="hint">${TIER_HELP} 只計算最近幾個月：<input id="rp-months" type="number" min="1" value="${rp.window_months ?? 12}" style="width:80px;display:inline-block"> 個月</p>
+      <p class="hint">${TIER_HELP}</p>
+      <p class="hint">計算期間：<select id="rp-window" style="width:auto;display:inline-block">
+          <option value="season" ${(rp.window ?? 'season') !== 'months' ? 'selected' : ''}>本季（越南時間三個月一季，每季從 0 開始）</option>
+          <option value="months" ${rp.window === 'months' ? 'selected' : ''}>最近幾個月</option>
+        </select>
+        <span id="rp-months-box">最近 <input id="rp-months" type="number" min="1" value="${rp.window_months ?? 12}" style="width:80px;display:inline-block"> 個月</span>
+        　名次變動（▲▼）和 <input id="rp-change-days" type="number" min="1" value="${rp.change_days ?? 7}" style="width:70px;display:inline-block"> 天前比</p>
       <table id="tiers"><tr><th>分級代碼</th>${[1, 2, 3, 4, 5, 6, 7, 8].map((n) => `<th>第 ${n} 名</th>`).join('')}<th></th></tr></table>
       <div class="actions"><button class="btn" id="tier-add">新增分級</button><button class="btn gold inline" id="rp-save">儲存排名積分</button></div>
       <p class="hint">雙敗或單淘汰時，同一輪被淘汰的人名次相同，下一個名次會跳號（例如兩位四強都是第 3 名，就沒有第 4 名，接下來是第 5 名）。空白 = 0 分。</p>
@@ -477,6 +596,10 @@ async function rules() {
   Object.entries(rp.tiers ?? {}).forEach(([code, pts]) => addTierRow(code, pts));
   if (!Object.keys(rp.tiers ?? {}).length) addTierRow();
   $('#tier-add').onclick = () => addTierRow();
+  // 選「本季」時不用填幾個月
+  const syncWindow = () => { $('#rp-months-box').style.display = $('#rp-window').value === 'months' ? '' : 'none'; };
+  $('#rp-window').onchange = syncWindow;
+  syncWindow();
   $('#rp-save').onclick = async () => {
     const tiers = {};
     tiersTable.querySelectorAll('tr').forEach((tr) => {
@@ -486,7 +609,13 @@ async function rules() {
       tr.querySelectorAll('.tier-pt').forEach((i) => { if (i.value !== '') pts[i.dataset.n] = Number(i.value); });
       tiers[code] = pts;
     });
-    const value = { ...rp, window_months: Number($('#rp-months').value) || 12, tiers };
+    const value = {
+      ...rp,
+      window: $('#rp-window').value === 'months' ? 'months' : 'season',
+      window_months: Number($('#rp-months').value) || 12,
+      change_days: Number($('#rp-change-days').value) || 7,
+      tiers,
+    };
     await run(db.from('app_config').update({ value }).eq('key', 'ranking_points'), '已儲存排名積分');
   };
 
@@ -522,7 +651,9 @@ async function rules() {
 // ---------------------------------------------------------------------
 // 廣告
 // ---------------------------------------------------------------------
-const SLOTS = { splash: '開啟畫面', home_banner: '首頁橫幅', ranking_banner: '排行榜橫幅' };
+const SLOTS = { home_hero: '首頁大圖輪播（16:9）', home_banner: '首頁橫幅', ranking_banner: '排行榜橫幅', splash: '開啟畫面' };
+// 各位置建議的圖片尺寸
+const SLOT_SIZE = { home_hero: '建議 1920×1080（16:9）', home_banner: '建議 1600×600', ranking_banner: '建議 1600×600', splash: '建議 1080×1920 直式（9:16），重點放中間，上下左右可能被裁一點' };
 const localInput = (d) => (d ? new Date(new Date(d).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
 async function ads() {
   const [list, stats, venueList] = await Promise.all([
@@ -535,7 +666,7 @@ async function ads() {
     <table><tr><th>圖片</th><th>位置</th><th>期間</th><th>曝光／點擊</th><th>狀態</th><th></th></tr>
       ${list.map((a) => `<tr><td><img class="thumb" src="${esc(a.image_url)}" alt=""></td>
         <td>${esc(SLOTS[a.slot] ?? a.slot)}<div class="hint">${a.venue_ids?.length ? a.venue_ids.length + ' 家球館' : '全部球館'}</div>
-          ${a.link ? `<div class="hint"><a href="${esc(a.link)}" target="_blank" rel="noopener">連結</a></div>` : ''}</td>
+          ${a.link && /^(https?:\/\/|\/tournament\/)/.test(a.link) ? `<div class="hint"><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">連結</a></div>` : ''}</td>
         <td class="hint">${fmt(a.starts_at)}<br>到 ${fmt(a.ends_at)}</td>
         <td>${st[a.id]?.impressions ?? 0} ／ ${st[a.id]?.clicks ?? 0}<div class="hint">${st[a.id]?.viewers ?? 0} 人看過</div></td>
         <td>${a.active ? '<span class="pill ok">上架</span>' : '<span class="pill">下架</span>'}</td>
@@ -547,9 +678,9 @@ async function ads() {
     <div class="form">
       <div class="row">
         <div><label>位置</label><select id="a-slot">${Object.entries(SLOTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
-        <div><label>圖片（建議 1600×600，2 MB 以內）</label><input id="a-img" type="file" accept="image/png,image/jpeg,image/webp"></div>
+        <div><label>圖片（<span id="a-size">${SLOT_SIZE.home_hero}</span>，2 MB 以內）</label><input id="a-img" type="file" accept="image/png,image/jpeg,image/webp"></div>
       </div>
-      <div><label>點了要開的網址（可以空白）</label><input id="a-link" placeholder="https://"></div>
+      <div><label>點了要開的網址（可以空白）</label><input id="a-link" placeholder="https://… 或 App 內頁面 /tournament/比賽ID"><div class="hint">https:// 開頭會開瀏覽器；/ 開頭會開 App 內的頁面（例如某場比賽）</div></div>
       <div class="row">
         <div><label>開始時間（空白 = 馬上）</label><input id="a-start" type="datetime-local"></div>
         <div><label>結束時間（空白 = 不結束）</label><input id="a-end" type="datetime-local"></div>
@@ -558,6 +689,7 @@ async function ads() {
         <div class="row">${venueList.map((v) => `<label class="switch"><input type="checkbox" class="a-venue" value="${v.id}"><span style="color:var(--text)">${esc(v.name)}</span></label>`).join('')}</div></div>
       <div><button class="btn gold inline" id="a-save">上傳並上架</button></div>
     </div>`;
+  $('#a-slot').onchange = () => ($('#a-size').textContent = SLOT_SIZE[$('#a-slot').value] ?? '');
   page().querySelectorAll('[data-toggle]').forEach((b) => (b.onclick = async () => {
     await run(db.from('ads').update({ active: b.dataset.on !== 'true' }).eq('id', b.dataset.toggle), '已更新');
     ads();

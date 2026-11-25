@@ -4,9 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
+  <!-- 只允許載入自己的檔案、固定版本的 supabase-js 和我們的 Supabase；擋掉被注入的外部程式 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co wss://zcvtqzjgmhsstbyzvuyo.supabase.co; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co data: blob:; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <!-- 不能被別的網站用 iframe 嵌入（GitHub Pages 不能送 X-Frame-Options，用這段擋） -->
+  <style>html.framed body { display: none !important; }</style>
   <title>Sniper 管理後台</title>
   <link rel="stylesheet" href="admin.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+  <script src="frame-guard.js"></script>
+  <!-- integrity：CDN 上的檔案被改過就不會執行 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"
+          integrity="sha384-rwykjmWNwVxboyFmvK9OXN0wj9hnMHA2aAHtits54DuACyCq0M2PrSNxhRb+hvXT" crossorigin="anonymous"></script>
 </head>
 <body>
   <!-- 登入 -->
@@ -36,6 +44,7 @@
     <nav class="side">
       <div class="brand">◎ SNIPER <span>管理後台</span></div>
       <a href="#/overview" data-page="overview">總覽</a>
+      <a href="#/levels" data-page="levels">等級審核</a>
       <a href="#/venues" data-page="venues">球館與員工</a>
       <a href="#/players" data-page="players">球員</a>
       <a href="#/flags" data-page="flags">可疑名單</a>
