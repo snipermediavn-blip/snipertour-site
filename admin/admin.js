@@ -439,12 +439,33 @@ async function renderStaff(v) {
 // 手機號碼只有管理員看得到（伺服器 admin_members 把關）；每次匯出都會留紀錄（誰、何時、幾筆）
 // ---------------------------------------------------------------------
 const MEMBERS_PAGE = 50;
+// 會員編號（VN＋6 位數字）：admin_members 沒有這欄，另外用 profiles 查（每次 200 人）
+async function memberNoMap(ids) {
+  const out = {};
+  for (let i = 0; i < ids.length; i += 200) {
+    const rows = await run(db.from('profiles').select('id, member_no').in('id', ids.slice(i, i + 200)));
+    for (const r of rows) out[r.id] = r.member_no;
+  }
+  return out;
+}
+const parseSN = (q) => {
+  const m = String(q ?? '').toUpperCase().replace(/[\s.-]/g, '').match(/^(VN)?([1-9]\d{5,6})$/);
+  return m ? m[2] : null;
+};
+// 搜尋會員編號：先找到那個人，再用名字查會員名單、留下同一個人
+async function membersBySN(sn, exportAll) {
+  const hit = await run(db.rpc('find_player_by_member_no', { p_text: sn }));
+  if (!hit.length) return [];
+  const list = await run(db.rpc('admin_members', { p_query: hit[0].display_name ?? '', p_limit: 200, p_offset: 0, p_export: exportAll }));
+  return list.filter((m) => m.id === hit[0].id).map((m) => ({ ...m, total: 1 }));
+}
+
 async function members() {
   let offset = 0;
   page().innerHTML = `<h1>會員名單</h1>
     <p class="muted">手機號碼屬於個人資料：只在需要聯絡會員時使用，不要轉給其他人。每次匯出都會留下紀錄。</p>
     <div class="row" style="gap:8px;flex-wrap:wrap">
-      <input id="m-q" placeholder="名字（不用打聲調）、手機號碼或 Email" style="max-width:320px">
+      <input id="m-q" placeholder="名字（不用打聲調）、會員編號 VN、手機號碼或 Email" style="max-width:320px">
       <button class="btn gold inline" id="m-search">搜尋</button>
       <button class="btn inline" id="m-export">匯出 Excel</button>
     </div>
@@ -452,14 +473,19 @@ async function members() {
   const q = () => $('#m-q').value.trim() || null;
   const statusText = (s) => (s === 'active' ? '正常' : '停權');
   const load = async () => {
-    const list = await run(db.rpc('admin_members', { p_query: q(), p_limit: MEMBERS_PAGE, p_offset: offset, p_export: false }));
+    const sn = parseSN(q());
+    const list = sn
+      ? await membersBySN(sn, false)
+      : await run(db.rpc('admin_members', { p_query: q(), p_limit: MEMBERS_PAGE, p_offset: offset, p_export: false }));
+    const nos = await memberNoMap(list.map((m) => m.id));
     const total = list.length ? Number(list[0].total) : 0;
     const from = total ? offset + 1 : 0;
     const to = offset + list.length;
     $('#m-results').innerHTML = `<p class="muted">共 ${total} 人${total ? `，第 ${from}–${to} 人` : ''}</p>
-      <table><tr><th>暱稱</th><th>手機號碼</th><th>等級</th><th>地區</th><th>狀態</th><th>Zalo</th><th>認證</th><th>註冊</th><th></th></tr>
+      <table><tr><th>暱稱</th><th>編號</th><th>手機號碼</th><th>等級</th><th>地區</th><th>狀態</th><th>Zalo</th><th>認證</th><th>註冊</th><th></th></tr>
       ${list.map((m) => `<tr>
         <td>${esc(m.display_name ?? '（未設定暱稱）')}${m.role === 'admin' ? ' <span class="pill warn">管理員</span>' : ''}</td>
+        <td style="white-space:nowrap">${nos[m.id] ? 'VN ' + esc(nos[m.id]) : '—'}</td>
         <td style="white-space:nowrap">${esc(m.phone ?? '—')}${m.phone_verified === false ? ' <span class="pill warn">未驗證</span>' : ''}${m.email ? `<div class="hint">${esc(m.email)}</div>` : ''}</td>
         <td>${m.level ? `<span class="badge">${esc(m.level)}</span>` : '—'}</td>
         <td>${m.city ? esc(CITY_ZH[m.city] ?? m.city) : '<span class="muted">—</span>'}</td>
@@ -467,7 +493,7 @@ async function members() {
         <td style="white-space:nowrap">${m.has_zalo ? '已綁定' : '—'}</td>
         <td>${m.verified_at ? fmt(m.verified_at) : '<span class="muted">未認證</span>'}</td>
         <td>${fmt(m.created_at)}</td>
-        <td><button class="btn small" data-open="${m.id}">查看／調整</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">找不到</td></tr>'}
+        <td><button class="btn small" data-open="${m.id}">查看／調整</button></td></tr>`).join('') || '<tr><td colspan="10" class="muted">找不到</td></tr>'}
       </table>
       <div class="row" style="gap:8px;margin-top:12px">
         <button class="btn small" id="m-prev" ${offset === 0 ? 'disabled' : ''}>上一頁</button>
@@ -482,7 +508,11 @@ async function members() {
   $('#m-q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
   $('#m-export').onclick = async () => {
     if (!confirm('匯出的檔案有會員的手機號碼，請妥善保管、不要轉給其他人。確定要匯出嗎？')) return;
-    const list = await run(db.rpc('admin_members', { p_query: q(), p_limit: 10000, p_offset: 0, p_export: true }));
+    const sn = parseSN(q());
+    const list = sn
+      ? await membersBySN(sn, true)
+      : await run(db.rpc('admin_members', { p_query: q(), p_limit: 10000, p_offset: 0, p_export: true }));
+    const nos = await memberNoMap(list.map((m) => m.id));
     // Excel 會把 = + - @ 開頭的格子當公式執行：暱稱是使用者自己填的，前面加 ' 讓它只當文字
     const cell = (v) => {
       // 手機號碼用 Excel 的 ="0901…" 寫法，開頭的 0 才不會被吃掉（只有數字，自己產生的，安全）
@@ -492,9 +522,10 @@ async function members() {
       return '"' + s.replace(/"/g, '""') + '"';
     };
     const rows = [
-      ['暱稱', '手機號碼', '手機已驗證', 'Email', '等級', '地區', '狀態', 'Zalo', '認證時間', '註冊時間'],
+      ['暱稱', '會員編號', '手機號碼', '手機已驗證', 'Email', '等級', '地區', '狀態', 'Zalo', '認證時間', '註冊時間'],
       ...list.map((m) => [
         m.display_name ?? '',
+        nos[m.id] ? 'VN ' + nos[m.id] : '',
         { phone: m.phone },
         m.phone_verified === false ? '否（用 Email 註冊）' : '是',
         m.email ?? '',
