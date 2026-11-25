@@ -593,11 +593,15 @@ function foldVi(s) {
 }
 
 async function playerDetail(id) {
-  const [p, ratings, history] = await Promise.all([
+  const [p, chat, ratings, history] = await Promise.all([
     run(db.from('profiles').select('*').eq('id', id).single()),
+    run(db.rpc('admin_chat_moderation', { p_user: id })),
     run(db.from('ratings').select('*').eq('player_id', id)),
     run(db.from('level_history').select('*').eq('player_id', id).order('created_at', { ascending: false })),
   ]);
+  const ban = chat?.ban;
+  const banText = !ban || !ban.active ? '<span class="pill ok">可以留言</span>'
+    : ban.muted_until ? `<span class="pill bad">禁言到 ${fmt(ban.muted_until)}</span>` : '<span class="pill bad">留言已停用（等管理員處理）</span>';
   const reason = { verification: '球館認證', championship: '冠軍路線', rating: '實力分路線', admin: '管理員調整' };
   const box = $('#p-detail');
   box.innerHTML = `<h2>${esc(p.display_name ?? '（未設定暱稱）')}</h2>
@@ -618,12 +622,31 @@ async function playerDetail(id) {
           ? '<button class="btn small" id="d-status-unlock">允許修改狀態</button>'
           : '<button class="btn small danger" id="d-status-lock">清除並禁止修改</button>'}
       </div>
+      <label style="margin-top:14px">約戰留言管理（嚴禁賭博、色情、違法、私下聯絡方式）</label>
+      <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04)">
+        ${banText} · 30 天內嚴重違規 <b>${chat?.strikes_30d ?? 0}</b> 次 ·
+        ${chat?.accepted_at ? '同意規則：' + fmt(chat.accepted_at) : '<span class="muted">還沒同意規則</span>'}
+      </div>
+      <div class="actions">
+        <button class="btn small danger" id="d-chat-7">禁言 7 天</button>
+        <button class="btn small danger" id="d-chat-forever">停用留言</button>
+        ${ban && ban.active ? '<button class="btn small" id="d-chat-unmute">解除禁言</button>' : ''}
+      </div>
       <div class="actions">
         ${p.status === 'active'
           ? '<button class="btn danger" id="d-suspend">停權</button>'
           : '<button class="btn" id="d-unsuspend">恢復帳號</button>'}
       </div>
     </div>
+    <h2>被擋下的留言（違規紀錄）</h2>
+    <table><tr><th>時間</th><th>類別</th><th>原文</th></tr>
+      ${(chat?.violations ?? []).map((v) => `<tr><td>${fmt(v.created_at)}</td>
+        <td>${v.severe ? '<span class="pill bad">' : '<span class="pill">'}${CHAT_CAT[v.category] ?? v.category}</span></td><td>${esc(v.body)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">沒有</td></tr>'}
+    </table>
+    <h2>最近送出的留言</h2>
+    <table><tr><th>時間</th><th>內容</th></tr>
+      ${(chat?.messages ?? []).map((m) => `<tr><td>${fmt(m.created_at)}</td><td>${esc(m.body)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">沒有</td></tr>'}
+    </table>
     <h2>實力分</h2>
     <table><tr><th>項目</th><th>實力分</th><th>場數</th><th>暫定期</th></tr>
       ${ratings.map((r) => `<tr><td>${{ '8ball': '8 號球', '9ball': '9 號球', '10ball': '10 號球' }[r.discipline] ?? r.discipline}</td>
@@ -647,6 +670,15 @@ async function playerDetail(id) {
     await run(db.rpc('admin_set_level', { p_player_id: id, p_level: $('#d-level').value, p_note: $('#d-note').value }), '已調整等級');
     playerDetail(id);
   };
+  const chatMute = async (action, days, ask) => {
+    const note = prompt(ask + String.fromCharCode(10) + '原因（選填，會留紀錄）：', '');
+    if (note === null) return;
+    await run(db.rpc('admin_set_chat_mute', { p_user: id, p_action: action, p_days: days, p_note: note }), '已更新');
+    playerDetail(id);
+  };
+  $('#d-chat-7').onclick = () => chatMute('mute_days', 7, '禁言 7 天？');
+  $('#d-chat-forever').onclick = () => chatMute('mute_forever', null, '停用這個人的留言功能（直到你解除）？');
+  if ($('#d-chat-unmute')) $('#d-chat-unmute').onclick = () => chatMute('unmute', null, '解除禁言？');
   const setStatus = async (status) => {
     if (!confirm(status === 'suspended' ? '確定停權？停權後不能報名比賽。' : '確定恢復這個帳號？')) return;
     await run(db.from('profiles').update({ status }).eq('id', id), '已更新');
@@ -660,6 +692,9 @@ async function playerDetail(id) {
 // ---------------------------------------------------------------------
 // 可疑名單（只標記，由負責人判斷，第 5.9 節）
 // ---------------------------------------------------------------------
+const CHAT_CAT = {
+  gambling: '賭博', sexual: '色情', illegal: '違法', has_contact: '聯絡方式', has_link: '網址', inappropriate: '髒話',
+};
 const FLAG_TYPES = {
   final_forfeit: '決賽棄權',
   handicap_above_level: '讓球等級高於顯示等級（實力分超過自己的等級）',
@@ -671,6 +706,8 @@ const FLAG_TYPES = {
   dispute_own_win: '對自己贏的比賽提出爭議（會讓這場暫時不計分）',
   chat_gambling: '約戰留言提到賭博（已被擋下）',
   chat_sexual: '約戰留言有色情內容（已被擋下）',
+  chat_illegal: '約戰留言有違法內容：毒品、高利貸、武器、威脅（已被擋下）',
+  chat_muted: '約戰留言多次嚴重違規，已自動停用留言（請決定要不要停權）',
 };
 const DISC = { '8ball': '8 號球', '9ball': '9 號球', '10ball': '10 號球' };
 async function flags() {
@@ -721,7 +758,9 @@ function flagDetail(f, names = {}) {
       return `${DISC[d.discipline] ?? d.discipline}：最近 ${d.games} 場賽後分數都在 ${d.threshold} 以上（最低 ${d.min_rating}），仍是 ${d.level} 級`;
     case 'dispute_own_win': return `理由：${d.reason ?? ''}`;
     case 'chat_gambling':
-    case 'chat_sexual': return `留言：「${d.text ?? ''}」`;
+    case 'chat_sexual':
+    case 'chat_illegal': return `留言：「${d.text ?? ''}」`;
+    case 'chat_muted': return `30 天內第 ${d.strikes} 次嚴重違規，最後一則：「${d.text ?? ''}」`;
     case 'upset_losses': return `近 ${d.days} 天輸給比自己低 ${d.gap} 分以上的對手 ${d.losses} 次`;
     case 'venue_fast_promotions':
       return `${n(d.venue_id)}：近 90 天認證 ${d.verified} 人，${d.fast} 人在 20 場內就靠實力分升級（${(d.players ?? []).map(n).join('、')}）`;
