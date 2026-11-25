@@ -158,7 +158,7 @@ $('#mfa-cancel').onclick = async () => { await db.auth.signOut(); location.hash 
 // ---------------------------------------------------------------------
 // 頁面切換
 // ---------------------------------------------------------------------
-const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, rules, ads, push };
+const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, otp, rules, ads, push };
 function route() {
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
@@ -844,6 +844,136 @@ const CONFIG_NAMES = {
   home_sections: 'App 首頁區塊與順序',
   bracket: '對戰表',
 };
+// ---------------------------------------------------------------------
+// 驗證碼（負責人 2026-11-26 獨立出來）：Zalo 官方帳號、Zalo 即時額度與品質、發送統計、範本、上限
+// ---------------------------------------------------------------------
+const OTP_RESULT = {
+  sent: '成功', not_configured: '還沒設定好（範本 ID 空白或官方帳號沒連結）', invalid_phone: '號碼不對',
+  rate_limited: '超過上限被擋', zalo_account_not_found: '這個號碼沒有 Zalo', failed: 'Zalo 送不出去',
+};
+const QUALITY = { HIGH: '好', MEDIUM: '中', LOW: '差', UNDEFINED: '還沒評等' };
+const ZBS_URL = 'https://account.zalo.solutions/VVUAMWWNKBPQ76RV';
+const vnd = (n) => Number(n ?? 0).toLocaleString('vi-VN') + ' đ';
+
+async function otp() {
+  const rows = await run(db.from('app_config').select('*').in('key', ['zalo_otp', 'otp_limits']));
+  const zaloCfg = rows.find((r) => r.key === 'zalo_otp')?.value ?? { template_id: null, param: 'otp', unit_price: 400 };
+  const limits = rows.find((r) => r.key === 'otp_limits')?.value ?? { per_phone_per_day: 5, total_per_hour: 300 };
+  const [zaloStatus, s] = await Promise.all([run(db.rpc('zalo_oa_status')), run(db.rpc('admin_otp_stats'))]);
+  const zaloResult = { linked: '已連結 Zalo 官方帳號', cancelled: '已取消連結', expired: '連結逾時，請再按一次', failed: '連結失敗，請再試一次' };
+  const zr = new URLSearchParams(location.hash.split('?')[1]).get('zalo');
+  if (zr) { toast(zaloResult[zr] ?? zr, zr !== 'linked'); history.replaceState(null, '', '#/otp'); }
+  const ready = zaloStatus.linked && zaloCfg.template_id;
+  const w = s.windows ?? {};
+  const card = (n, label, sub = '') => `<div class="card"><div class="num">${n}</div><div class="label">${label}</div>${sub ? `<div class="hint">${sub}</div>` : ''}</div>`;
+
+  page().innerHTML = `<h1>驗證碼</h1>
+    <p class="hint">註冊、忘記密碼時用 Zalo 送 6 位數驗證碼（平常登入不用）。${ready
+      ? '<span class="pill ok">可以送</span>'
+      : '<span class="pill bad">還不能送</span> 要官方帳號已連結＋範本 ID 填好（範本要 Zalo 審核通過）。'}</p>
+
+    <h2>Zalo 即時狀態</h2>
+    <div class="cards" id="otp-live"><p class="muted">查詢 Zalo 中…</p></div>
+    <p class="hint">餘額 Zalo 沒有提供查詢的 API，請到 <a href="${ZBS_URL}/spending/overview" target="_blank" rel="noopener">ZBS 後台</a> 看（右上角「Số dư」）。
+      <a href="${ZBS_URL}/tool/zns/manage/template" target="_blank" rel="noopener">範本審核狀態</a> ·
+      <a href="${ZBS_URL}/topup" target="_blank" rel="noopener">儲值</a> ·
+      <a href="https://oa.zalo.me/manage/subscription" target="_blank" rel="noopener">官方帳號方案</a></p>
+
+    <h2>我們送出的驗證碼</h2>
+    <div class="cards">
+      ${card(w.today?.sent ?? 0, '今天成功', `失敗 ${w.today?.failed ?? 0} · 約 ${vnd(w.today?.cost)}`)}
+      ${card(w.d7?.sent ?? 0, '近 7 天成功', `失敗 ${w.d7?.failed ?? 0} · 約 ${vnd(w.d7?.cost)}`)}
+      ${card(w.d30?.sent ?? 0, '近 30 天成功', `失敗 ${w.d30?.failed ?? 0} · 約 ${vnd(w.d30?.cost)}`)}
+      ${card(s.last_hour ?? 0, '最近一小時送出', `上限 ${limits.total_per_hour ?? 300} 則／小時`)}
+    </div>
+    <p class="hint">花費是用「成功則數 × 每則單價 ${vnd(s.unit_price)}」估的，實際以 ZBS 帳單為準。
+      ${s.last_sent_at ? '最近一次成功：' + fmt(s.last_sent_at) + '。' : '還沒有成功送出過。'}
+      ${s.last_failure ? `最近一次失敗：${fmt(s.last_failure.at)}（${esc(OTP_RESULT[s.last_failure.result] ?? s.last_failure.result)}${s.last_failure.zalo_error ? '，Zalo 錯誤 ' + s.last_failure.zalo_error : ''}）。` : ''}</p>
+    <table><tr><th>日期（越南時間）</th><th>成功</th><th>失敗</th><th>約花費</th></tr>
+      ${(s.daily ?? []).map((d) => `<tr><td>${esc(d.day)}</td><td>${d.sent}</td><td>${d.failed ? `<span class="pill bad">${d.failed}</span>` : '0'}</td><td>${vnd(d.sent * s.unit_price)}</td></tr>`).join('')}
+    </table>
+    ${Object.keys(s.by_result_30d ?? {}).filter((k) => k !== 'sent').length ? `<p class="hint">近 30 天失敗原因：${Object.entries(s.by_result_30d).filter(([k]) => k !== 'sent').map(([k, n]) => esc(OTP_RESULT[k] ?? k) + ' ' + n).join('、')}</p>` : ''}
+
+    <h2>Zalo 官方帳號</h2>
+    <div class="form">
+      <div>${zaloStatus.linked
+        ? `<span class="pill ok">已連結</span> <span class="hint">OA ${esc(zaloStatus.oa_id ?? '')}，token 更新於 ${fmt(zaloStatus.updated_at)}（每天自動更新）</span>`
+        : '<span class="pill bad">還沒連結</span>'}</div>
+      <div><button class="btn${zaloStatus.linked ? '' : ' gold inline'}" id="zalo-link">${zaloStatus.linked ? '重新連結' : '連結 Zalo 官方帳號'}</button>
+        <span class="hint">會打開 Zalo 授權頁，請用 OA 管理員的 Zalo 按「允許」。</span></div>
+    </div>
+
+    <h2>範本</h2>
+    <div class="form">
+      <div class="row">
+        <div><label>驗證碼範本 ID（Zalo 審核通過後拿到）</label><input id="zalo-tpl" value="${esc(zaloCfg.template_id)}"></div>
+        <div class="shrink"><label>範本參數名稱</label><input id="zalo-param" value="${esc(zaloCfg.param ?? 'otp')}" style="width:120px"></div>
+        <div class="shrink"><label>每則單價（VND，估花費用）</label><input id="zalo-price" type="number" min="0" value="${esc(zaloCfg.unit_price ?? 400)}" style="width:120px"></div>
+        <button class="btn gold inline" id="zalo-save">儲存</button>
+      </div>
+      <p class="hint">範本 ID 空白時，App 會顯示「目前無法傳送驗證碼」（Zalo 登入不受影響）。</p>
+    </div>
+
+    <h2>發送上限（防止被狂發浪費錢）</h2>
+    <div class="form">
+      <div class="row">
+        <div class="shrink"><label>同一個號碼 24 小時最多幾則</label><input id="otp-per-phone" type="number" min="1" value="${esc(limits.per_phone_per_day ?? 5)}" style="width:120px"></div>
+        <div class="shrink"><label>全平台每小時最多幾則</label><input id="otp-per-hour" type="number" min="1" value="${esc(limits.total_per_hour ?? 300)}" style="width:120px"></div>
+        <button class="btn gold inline" id="otp-limits-save">儲存上限</button>
+      </div>
+      <p class="hint">每小時用到 80% 時 Telegram 會發警報。辦大型活動前可以先調高每小時上限。</p>
+    </div>`;
+
+  // Zalo 即時額度、品質（要 OA 成長方案以上）
+  (async () => {
+    const box = $('#otp-live');
+    if (!zaloStatus.linked) { box.innerHTML = '<p class="muted">官方帳號還沒連結。</p>'; return; }
+    try {
+      const { data: { session } } = await db.auth.getSession();
+      const res = await fetch(SUPABASE_URL + '/functions/v1/zalo-otp/stats', {
+        method: 'POST', headers: { Authorization: 'Bearer ' + session?.access_token, apikey: SUPABASE_KEY },
+      });
+      const out = await res.json();
+      const q = out.quota;
+      const ql = out.quality;
+      const needUpgrade = [out.quota_error, out.quality_error].some((e) => e && e.code === -120);
+      box.innerHTML = (q
+        ? card(q.dailyQuota ?? '–', 'Zalo 每日額度') + card(q.remainingQuota ?? '–', '今天還能送',
+            '已用 ' + ((q.dailyQuota ?? 0) - (q.remainingQuota ?? 0)) + ' 則')
+        : '') +
+        (ql ? card(esc(QUALITY[ql.oaCurrentQuality] ?? ql.oaCurrentQuality ?? '–'), '傳送品質（目前）', '近 7 天：' + esc(QUALITY[ql.oa7dayQuality] ?? ql.oa7dayQuality ?? '–')) : '') +
+        (needUpgrade
+          ? '<p class="msg">Zalo 回覆「官方帳號沒有權限」（-120）：要把官方帳號升級到「成長方案（Tăng trưởng）」以上，才能用 API 送驗證碼和查額度。<a href="https://oa.zalo.me/manage/subscription" target="_blank" rel="noopener">去升級</a></p>'
+          : (!q && out.quota_error ? '<p class="msg">查額度失敗：' + esc(out.quota_error.message ?? out.quota_error.code) + '</p>' : ''));
+    } catch (e) {
+      box.innerHTML = '<p class="msg">連不上 Zalo：' + esc(String(e)) + '</p>';
+    }
+  })();
+
+  $('#zalo-save').onclick = async () => {
+    const value = { ...zaloCfg, template_id: $('#zalo-tpl').value.trim() || null, param: $('#zalo-param').value.trim() || 'otp',
+      unit_price: Number($('#zalo-price').value) || 400 };
+    await run(db.from('app_config').update({ value }).eq('key', 'zalo_otp'), '已儲存範本設定');
+    otp();
+  };
+  $('#otp-limits-save').onclick = async () => {
+    const perPhone = Number($('#otp-per-phone').value);
+    const perHour = Number($('#otp-per-hour').value);
+    if (!(perPhone >= 1 && perHour >= 1)) return toast('上限要大於 0', true);
+    await run(db.from('app_config').update({ value: { ...limits, per_phone_per_day: perPhone, total_per_hour: perHour } }).eq('key', 'otp_limits'), '已儲存上限');
+    otp();
+  };
+  $('#zalo-link').onclick = async () => {
+    const { data: { session } } = await db.auth.getSession();
+    const res = await fetch(SUPABASE_URL + '/functions/v1/zalo-otp/oa/start', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + session?.access_token, apikey: SUPABASE_KEY },
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!out.url) return toast('無法開始連結：' + (out.error ?? res.status), true);
+    location.href = out.url;
+  };
+}
+
 const FLAG_NAMES = { zalo_login: 'Zalo 登入', challenges: '約戰', email_otp: 'Email 驗證碼註冊（Zalo 驗證碼還不能用時的備案；Zalo 好了請關掉）' };
 const TIER_HELP = '比賽分級代碼（weekly = 球館週賽、monthly = 球館月賽、quarterly = 季賽、open = 公開賽），建立比賽時選的分級要和這裡一樣；重要的比賽可以給比較多分。';
 
@@ -852,26 +982,11 @@ async function rules() {
   const get = (k) => rows.find((r) => r.key === k);
   const flagsRow = get('feature_flags');
   const rp = get('ranking_points')?.value ?? { window_months: 12, tiers: {} };
-  const zaloCfg = get('zalo_otp')?.value ?? { template_id: null, param: 'otp' };
-  const zaloStatus = await run(db.rpc('zalo_oa_status'));
-  const zaloResult = { linked: '已連結 Zalo 官方帳號', cancelled: '已取消連結', expired: '連結逾時，請再按一次', failed: '連結失敗，請再試一次' };
+  // 舊的 Zalo 連結回傳網址（#/rules?zalo=…）轉到「驗證碼」頁
   const zr = new URLSearchParams(location.hash.split('?')[1]).get('zalo');
-  if (zr) { toast(zaloResult[zr] ?? zr, zr !== 'linked'); history.replaceState(null, '', '#/rules'); }
+  if (zr) { location.hash = '#/otp?zalo=' + encodeURIComponent(zr); return; }
   page().innerHTML = `<h1>積分規則與設定</h1>
-    <h2>登入驗證碼（用 Zalo 傳送）</h2>
-    <div class="form">
-      <div>Zalo 官方帳號：${zaloStatus.linked
-        ? `<span class="pill ok">已連結</span> <span class="hint">OA ${esc(zaloStatus.oa_id ?? '')}，token 更新於 ${fmt(zaloStatus.updated_at)}（每天自動更新）</span>`
-        : '<span class="pill bad">還沒連結</span>'}</div>
-      <div><button class="btn${zaloStatus.linked ? '' : ' gold inline'}" id="zalo-link">${zaloStatus.linked ? '重新連結' : '連結 Zalo 官方帳號'}</button>
-        <span class="hint">會打開 Zalo 授權頁，請用 OA 管理員的 Zalo 按「允許」。</span></div>
-      <div class="row">
-        <div><label>驗證碼範本 ID（Zalo 審核通過後拿到）</label><input id="zalo-tpl" value="${esc(zaloCfg.template_id)}"></div>
-        <div class="shrink"><label>範本參數名稱</label><input id="zalo-param" value="${esc(zaloCfg.param ?? 'otp')}" style="width:120px"></div>
-        <button class="btn gold inline" id="zalo-save">儲存</button>
-      </div>
-      <p class="hint">範本 ID 空白時，App 登入會顯示「目前無法傳送驗證碼」（Zalo 登入不受影響）。</p>
-    </div>
+    <p class="hint">登入驗證碼（Zalo 官方帳號、範本、發送上限、用量）在左邊的「<a href="#/otp">驗證碼</a>」頁。</p>
 
     <h2>功能開關</h2>
     <div class="form" id="flags-box">
@@ -902,7 +1017,7 @@ async function rules() {
 
     <h2>其他參數（進階）</h2>
     <p class="hint">⚠ 等級只升不降，調高等級門檻前請先想清楚（第 5.11 節）。格式是 JSON，存檔前會檢查格式。</p>
-    ${rows.filter((r) => !['feature_flags', 'ranking_points', 'zalo_otp'].includes(r.key)).map((r) => `
+    ${rows.filter((r) => !['feature_flags', 'ranking_points', 'zalo_otp', 'otp_limits'].includes(r.key)).map((r) => `
       <div class="form" style="margin-bottom:12px">
         <div><b>${esc(CONFIG_NAMES[r.key] ?? r.key)}</b> <span class="muted">（${esc(r.key)}）</span></div>
         <div class="hint">${esc(r.description)}</div>
@@ -946,19 +1061,6 @@ async function rules() {
     await run(db.from('app_config').update({ value }).eq('key', 'ranking_points'), '已儲存排名積分');
   };
 
-  $('#zalo-save').onclick = async () => {
-    const value = { ...zaloCfg, template_id: $('#zalo-tpl').value.trim() || null, param: $('#zalo-param').value.trim() || 'otp' };
-    await run(db.from('app_config').update({ value }).eq('key', 'zalo_otp'), '已儲存驗證碼範本');
-  };
-  $('#zalo-link').onclick = async () => {
-    const { data: { session } } = await db.auth.getSession();
-    const res = await fetch(SUPABASE_URL + '/functions/v1/zalo-otp/oa/start', {
-      method: 'POST', headers: { Authorization: 'Bearer ' + session?.access_token, apikey: SUPABASE_KEY },
-    });
-    const out = await res.json().catch(() => ({}));
-    if (!out.url) return toast('無法開始連結：' + (out.error ?? res.status), true);
-    location.href = out.url;
-  };
   $('#flags-save').onclick = async () => {
     const value = { ...(flagsRow?.value ?? {}) };
     document.querySelectorAll('[data-flagkey]').forEach((c) => { value[c.dataset.flagkey] = c.checked; });
