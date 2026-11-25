@@ -309,7 +309,8 @@ async function players() {
       list = found.length ? await run(db.from('profiles').select('*').in('id', found.map((f) => f.id))) : [];
     } else {
       let query = db.from('profiles').select('*').order('created_at', { ascending: false }).limit(50);
-      if (q) query = query.ilike('display_name', '%' + q + '%');
+      // 不用打聲調：name_fold 是伺服器算的「拿掉聲調的名字」（nguyen 找得到 Nguyễn）
+      if (q) query = query.ilike('name_fold', '%' + foldVi(q).replace(/[%,()*]/g, ' ') + '%');
       list = await run(query);
     }
     $('#p-results').innerHTML = `<table><tr><th>球員</th><th>等級</th><th>認證</th><th>狀態</th><th></th></tr>
@@ -324,6 +325,11 @@ async function players() {
   $('#p-search').onclick = search;
   $('#p-q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
   search();
+}
+
+// 拿掉越南文聲調、轉小寫（和資料庫的 vn_fold 一樣）
+function foldVi(s) {
+  return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase();
 }
 
 async function playerDetail(id) {
