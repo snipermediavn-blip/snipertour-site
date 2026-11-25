@@ -158,7 +158,7 @@ $('#mfa-cancel').onclick = async () => { await db.auth.signOut(); location.hash 
 // ---------------------------------------------------------------------
 // 頁面切換
 // ---------------------------------------------------------------------
-const PAGES = { overview, levels, venues, players, members, flags, disputes, reports, rules, ads, push };
+const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, rules, ads, push };
 function route() {
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
@@ -1051,3 +1051,93 @@ async function push() {
 }
 
 start();
+
+// ---------------------------------------------------------------------
+// 吉利號碼（負責人 2026-11-25）：保留的豹子號、吉利號碼由管理員指定給會員
+// 指定後會員編號換成吉利號碼；收回換回原本的號碼，吉利號碼回到可用清單
+// ---------------------------------------------------------------------
+const LUCKY_CAT = { leopard: '豹子號', straight: '連號', pattern: '對稱號碼', combo: '吉利組合', ending: '吉利結尾' };
+async function lucky() {
+  page().innerHTML = `<h1>吉利號碼</h1>
+    <p class="hint">豹子號、吉利號碼不會自動發給新會員，要在這裡指定。指定後，會員的編號會換成吉利號碼；原本的號碼保留在他名下，按「收回」就換回來，吉利號碼也會回到可用清單。</p>
+    <h2>已專屬的號碼</h2>
+    <div id="l-assigned"></div>
+    <h2 style="margin-top:28px">指定吉利號碼給會員</h2>
+    <div class="form">
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div class="shrink"><label>分類</label>
+          <select id="l-cat"><option value="">全部</option>${Object.entries(LUCKY_CAT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        <div class="shrink"><label>包含的數字（選填）</label><input id="l-contains" placeholder="例如 888、168" style="width:160px" inputmode="numeric"></div>
+        <button class="btn inline" id="l-find-no">查詢可用號碼</button>
+      </div>
+      <label style="margin-top:12px">可用的號碼</label>
+      <select id="l-no"><option value="">（先按「查詢可用號碼」）</option></select>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px">
+        <div><label>會員（VN 編號、名字或手機號碼）</label><input id="l-q" placeholder="例如 VN 482915、Minh、0901234567"></div>
+        <button class="btn inline" id="l-find-user">找會員</button>
+      </div>
+      <label style="margin-top:12px">要給誰</label>
+      <select id="l-user"><option value="">（先按「找會員」）</option></select>
+      <label style="margin-top:12px">備註（選填，例如：老闆送的、活動獎品）</label>
+      <input id="l-note">
+      <div class="actions" style="margin-top:14px"><button class="btn gold inline" id="l-assign">指定</button></div>
+    </div>`;
+
+  const loadAssigned = async () => {
+    const list = await run(db.rpc('admin_lucky_assignments'));
+    $('#l-assigned').innerHTML = `<table><tr><th>號碼</th><th>分類</th><th>會員</th><th>原本的號碼</th><th>指定人</th><th>指定時間</th><th></th></tr>
+      ${list.map((r) => `<tr>
+        <td style="white-space:nowrap"><b>VN ${esc(r.no)}</b></td>
+        <td>${esc(LUCKY_CAT[r.category] ?? r.category ?? '')}</td>
+        <td>${esc(r.display_name ?? '（已刪除）')} ${r.level ? `<span class="badge">${esc(r.level)}</span>` : ''}</td>
+        <td style="white-space:nowrap">${r.original_no ? 'VN ' + esc(r.original_no) : '—'}</td>
+        <td>${esc(r.assigned_by_name ?? '—')}</td>
+        <td>${fmt(r.assigned_at)}</td>
+        <td>${r.user_id ? `<button class="btn small" data-revoke="${r.user_id}" data-no="${r.no}">收回</button>` : ''}</td></tr>`).join('') ||
+        '<tr><td colspan="7" class="muted">還沒有專屬的吉利號碼</td></tr>'}
+      </table>`;
+    $('#l-assigned').querySelectorAll('[data-revoke]').forEach((b) => (b.onclick = async () => {
+      const note = prompt(`收回 VN ${b.dataset.no}？會員會換回原本的號碼。\n備註（選填）：`, '');
+      if (note === null) return;
+      await run(db.rpc('admin_revoke_lucky_no', { p_user: b.dataset.revoke, p_note: note }), '已收回，會員換回原本的號碼');
+      loadAssigned();
+    }));
+  };
+
+  $('#l-find-no').onclick = async () => {
+    const list = await run(db.rpc('admin_available_lucky_numbers', {
+      p_category: $('#l-cat').value || null, p_contains: $('#l-contains').value.trim() || null, p_limit: 300,
+    }));
+    $('#l-no').innerHTML = list.length
+      ? list.map((r) => `<option value="${r.no}">VN ${r.no}（${esc(LUCKY_CAT[r.category] ?? r.category)}）</option>`).join('')
+      : '<option value="">沒有符合的可用號碼</option>';
+    toast(`找到 ${list.length} 個可用號碼${list.length >= 300 ? '（只列前 300 個，可以用「包含的數字」縮小範圍）' : ''}`);
+  };
+
+  $('#l-find-user').onclick = async () => {
+    const q = $('#l-q').value.trim();
+    if (!q) return toast('請輸入 VN 編號、名字或手機號碼', true);
+    const sn = parseSN(q);
+    const list = sn ? await membersBySN(sn, false) : await run(db.rpc('admin_members', { p_query: q, p_limit: 30, p_offset: 0, p_export: false }));
+    const nos = await memberNoMap(list.map((m) => m.id));
+    $('#l-user').innerHTML = list.length
+      ? list.map((m) => `<option value="${m.id}">${esc(m.display_name ?? '（未設定暱稱）')} · VN ${esc(nos[m.id] ?? '—')}${m.phone ? ' · ' + esc(m.phone) : ''}${m.level ? ' · ' + esc(m.level) + ' 級' : ''}</option>`).join('')
+      : '<option value="">找不到會員</option>';
+  };
+  $('#l-q').onkeydown = (e) => { if (e.key === 'Enter') $('#l-find-user').click(); };
+
+  $('#l-assign').onclick = async () => {
+    const no = Number($('#l-no').value);
+    const user = $('#l-user').value;
+    if (!no) return toast('請先選號碼', true);
+    if (!user) return toast('請先選會員', true);
+    const who = $('#l-user').selectedOptions[0]?.textContent ?? '';
+    if (!confirm(`把 VN ${no} 指定給「${who}」？\n他的會員編號會換成 VN ${no}。`)) return;
+    await run(db.rpc('admin_assign_lucky_no', { p_user: user, p_no: no, p_note: $('#l-note').value.trim() || null }), `已指定 VN ${no}`);
+    $('#l-no').innerHTML = '<option value="">（先按「查詢可用號碼」）</option>';
+    $('#l-note').value = '';
+    loadAssigned();
+  };
+
+  await loadAssigned();
+}
