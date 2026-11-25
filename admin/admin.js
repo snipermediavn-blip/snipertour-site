@@ -101,7 +101,7 @@ async function start() {
 // ---------------------------------------------------------------------
 // 頁面切換
 // ---------------------------------------------------------------------
-const PAGES = { overview, levels, venues, players, flags, disputes, reports, rules, ads, push };
+const PAGES = { overview, levels, venues, players, members, flags, disputes, reports, rules, ads, push };
 function route() {
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
@@ -290,6 +290,91 @@ async function renderStaff(v) {
       '已加入：' + (found[0].display_name ?? ''));
     renderStaff(v);
   };
+}
+
+// ---------------------------------------------------------------------
+// 會員名單（負責人 2026-11-25）：暱稱、手機號碼、等級、地區、狀態、註冊日期；可以搜尋、匯出 Excel
+// 手機號碼只有管理員看得到（伺服器 admin_members 把關）；每次匯出都會留紀錄（誰、何時、幾筆）
+// ---------------------------------------------------------------------
+const MEMBERS_PAGE = 50;
+async function members() {
+  let offset = 0;
+  page().innerHTML = `<h1>會員名單</h1>
+    <p class="muted">手機號碼屬於個人資料：只在需要聯絡會員時使用，不要轉給其他人。每次匯出都會留下紀錄。</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap">
+      <input id="m-q" placeholder="名字（不用打聲調）或手機號碼" style="max-width:320px">
+      <button class="btn gold inline" id="m-search">搜尋</button>
+      <button class="btn inline" id="m-export">匯出 Excel</button>
+    </div>
+    <div id="m-results" style="margin-top:16px"></div>`;
+  const q = () => $('#m-q').value.trim() || null;
+  const statusText = (s) => (s === 'active' ? '正常' : '停權');
+  const load = async () => {
+    const list = await run(db.rpc('admin_members', { p_query: q(), p_limit: MEMBERS_PAGE, p_offset: offset, p_export: false }));
+    const total = list.length ? Number(list[0].total) : 0;
+    const from = total ? offset + 1 : 0;
+    const to = offset + list.length;
+    $('#m-results').innerHTML = `<p class="muted">共 ${total} 人${total ? `，第 ${from}–${to} 人` : ''}</p>
+      <table><tr><th>暱稱</th><th>手機號碼</th><th>等級</th><th>地區</th><th>狀態</th><th>Zalo</th><th>認證</th><th>註冊</th><th></th></tr>
+      ${list.map((m) => `<tr>
+        <td>${esc(m.display_name ?? '（未設定暱稱）')}${m.role === 'admin' ? ' <span class="pill warn">管理員</span>' : ''}</td>
+        <td style="white-space:nowrap">${esc(m.phone ?? '—')}</td>
+        <td>${m.level ? `<span class="badge">${esc(m.level)}</span>` : '—'}</td>
+        <td>${m.city ? esc(CITY_ZH[m.city] ?? m.city) : '<span class="muted">—</span>'}</td>
+        <td style="white-space:nowrap">${m.status === 'active' ? '<span class="pill ok">正常</span>' : '<span class="pill bad">停權</span>'}</td>
+        <td style="white-space:nowrap">${m.has_zalo ? '已綁定' : '—'}</td>
+        <td>${m.verified_at ? fmt(m.verified_at) : '<span class="muted">未認證</span>'}</td>
+        <td>${fmt(m.created_at)}</td>
+        <td><button class="btn small" data-open="${m.id}">查看／調整</button></td></tr>`).join('') || '<tr><td colspan="9" class="muted">找不到</td></tr>'}
+      </table>
+      <div class="row" style="gap:8px;margin-top:12px">
+        <button class="btn small" id="m-prev" ${offset === 0 ? 'disabled' : ''}>上一頁</button>
+        <button class="btn small" id="m-next" ${to >= total ? 'disabled' : ''}>下一頁</button>
+      </div>`;
+    $('#m-results').querySelectorAll('[data-open]').forEach((b) => (b.onclick = () => playerDetail(b.dataset.open)));
+    $('#m-prev').onclick = () => { offset = Math.max(0, offset - MEMBERS_PAGE); load(); };
+    $('#m-next').onclick = () => { offset += MEMBERS_PAGE; load(); };
+  };
+  const search = () => { offset = 0; load(); };
+  $('#m-search').onclick = search;
+  $('#m-q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
+  $('#m-export').onclick = async () => {
+    if (!confirm('匯出的檔案有會員的手機號碼，請妥善保管、不要轉給其他人。確定要匯出嗎？')) return;
+    const list = await run(db.rpc('admin_members', { p_query: q(), p_limit: 10000, p_offset: 0, p_export: true }));
+    // Excel 會把 = + - @ 開頭的格子當公式執行：暱稱是使用者自己填的，前面加 ' 讓它只當文字
+    const cell = (v) => {
+      // 手機號碼用 Excel 的 ="0901…" 寫法，開頭的 0 才不會被吃掉（只有數字，自己產生的，安全）
+      if (v && typeof v === 'object') return v.phone ? '"=""' + String(v.phone).replace(/\D/g, '') + '"""' : '""';
+      let s = v == null ? '' : String(v);
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+    const rows = [
+      ['暱稱', '手機號碼', '等級', '地區', '狀態', 'Zalo', '認證時間', '註冊時間'],
+      ...list.map((m) => [
+        m.display_name ?? '',
+        { phone: m.phone },
+        m.level ?? '',
+        m.city ? (CITY_ZH[m.city] ?? m.city) : '',
+        statusText(m.status),
+        m.has_zalo ? '已綁定' : '',
+        m.verified_at ? fmt(m.verified_at) : '',
+        fmt(m.created_at),
+      ]),
+    ];
+    // 開頭加 BOM，Excel 打開才不會亂碼（越南文、中文）
+    const csv = '﻿' + rows.map((r) => r.map(cell).join(',')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const d = new Date();
+    a.download = `sniper-members-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`已匯出 ${list.length} 人`);
+  };
+  await load();
 }
 
 // ---------------------------------------------------------------------
