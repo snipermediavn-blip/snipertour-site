@@ -609,6 +609,15 @@ async function playerDetail(id) {
         <button class="btn gold inline" id="d-set">調整等級</button>
       </div>
       <p class="hint">等級原則上只升不降；手動調降會留下紀錄（第 5.8 節）。</p>
+      <label style="margin-top:14px">狀態消息（名字下面自己寫的一句話，公開）</label>
+      <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,.04)">${p.status_text ? esc(p.status_text) : '<span class="muted">（沒有填）</span>'}
+        ${p.status_locked ? ' <span class="pill bad">已禁止修改</span>' : ''}</div>
+      <div class="actions">
+        ${p.status_text ? '<button class="btn small" id="d-status-clear">清除狀態</button>' : ''}
+        ${p.status_locked
+          ? '<button class="btn small" id="d-status-unlock">允許修改狀態</button>'
+          : '<button class="btn small danger" id="d-status-lock">清除並禁止修改</button>'}
+      </div>
       <div class="actions">
         ${p.status === 'active'
           ? '<button class="btn danger" id="d-suspend">停權</button>'
@@ -625,6 +634,15 @@ async function playerDetail(id) {
       ${history.map((h) => `<tr><td>${fmt(h.created_at)}</td><td>${h.from_level ?? '—'} → ${h.to_level}</td>
         <td>${reason[h.reason] ?? h.reason}</td><td>${esc(h.note)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">沒有</td></tr>'}
     </table>`;
+  const statusAction = async (clear, lock, ask) => {
+    const note = prompt(ask + String.fromCharCode(10) + '原因（選填，會留紀錄）：', '');
+    if (note === null) return;
+    await run(db.rpc('admin_set_status', { p_user: id, p_clear: clear, p_lock: lock, p_note: note }), '已更新狀態');
+    playerDetail(id);
+  };
+  if ($('#d-status-clear')) $('#d-status-clear').onclick = () => statusAction(true, null, '清除這位球員的狀態消息？');
+  if ($('#d-status-lock')) $('#d-status-lock').onclick = () => statusAction(true, true, '清除狀態並禁止他修改？');
+  if ($('#d-status-unlock')) $('#d-status-unlock').onclick = () => statusAction(false, false, '允許他再修改狀態？');
   $('#d-set').onclick = async () => {
     await run(db.rpc('admin_set_level', { p_player_id: id, p_level: $('#d-level').value, p_note: $('#d-note').value }), '已調整等級');
     playerDetail(id);
