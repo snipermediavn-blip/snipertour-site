@@ -68,16 +68,16 @@ async function page(context, t, status, url) {
   const { env } = context;
   const html = await template(context);
   const canonical = SITE + url.pathname.replace(/\/$/, '');
-  let title = 'Giải đấu bida trên Sniper Billiards';
-  let desc = 'Xem thông tin giải đấu và đăng ký trong ứng dụng Sniper Billiards.';
-  let docTitle = 'Giải đấu bida · Sniper Billiards';
+  let title = 'Giải đấu bida trên WQW';
+  let desc = 'Xem thông tin giải đấu và đăng ký trong ứng dụng WQW.';
+  let docTitle = 'Giải đấu bida · WQW';
   let image = DEFAULT_IMAGE;
   if (status === 404) {
-    docTitle = 'Không tìm thấy giải đấu · Sniper Billiards';
+    docTitle = 'Không tìm thấy giải đấu · WQW';
   }
   if (t) {
     title = t.name;
-    docTitle = t.name + ' · Sniper Billiards';
+    docTitle = t.name + ' · WQW';
     desc = describe(t);
     image = await ogImage(t.cover_url, env);
   }
@@ -87,7 +87,7 @@ async function page(context, t, status, url) {
     `<meta name="description" content="${esc(desc)}">`,
     `<link rel="canonical" href="${esc(canonical)}">`,
     `<meta property="og:type" content="website">`,
-    `<meta property="og:site_name" content="Sniper Billiards">`,
+    `<meta property="og:site_name" content="WQW">`,
     `<meta property="og:locale" content="vi_VN">`,
     `<meta property="og:url" content="${esc(canonical)}">`,
     `<meta property="og:title" content="${esc(title)}">`,
