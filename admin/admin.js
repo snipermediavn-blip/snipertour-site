@@ -104,7 +104,7 @@ async function start() {
   }
   $('#me-name').textContent = me.display_name || '管理員';
   // 後台角色（2026-11-26）：依角色藏起用不到的頁面（真正的權限在資料庫檢查）
-  MY_ROLE = (await db.rpc('admin_role')).data || 'super_admin';
+  MY_ROLE = (await db.rpc('admin_role')).data || 'support';
   $('#me-name').textContent += '（' + (ROLE_NAMES[MY_ROLE] || MY_ROLE) + '）';
   document.querySelectorAll('.side a[data-roles]').forEach((a) => {
     const ok = MY_ROLE === 'super_admin' || a.dataset.roles.split(',').includes(MY_ROLE);
@@ -112,6 +112,7 @@ async function start() {
   });
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
+  READY = true;
   route();
 }
 
@@ -170,7 +171,10 @@ $('#mfa-cancel').onclick = async () => { await db.auth.signOut(); location.hash 
 // 頁面切換
 // ---------------------------------------------------------------------
 const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, feedback, otp, rules, release, configlog, roles, store, orders, revenue, ads, push };
+// 登入、兩步驟驗證都完成（start() 跑完）才載入頁面（安全檢查 2026-11-26）
+var READY = false; // var：start() 可能在這行執行前就被呼叫
 function route() {
+  if (!READY) return;
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
   page().innerHTML = '<p class="muted">載入中…</p>';
@@ -586,7 +590,7 @@ async function players() {
     }
     $('#p-results').innerHTML = `<table><tr><th>球員</th><th>等級</th><th>認證</th><th>狀態</th><th></th></tr>
       ${list.map((p) => `<tr><td>${esc(p.display_name ?? '（未設定暱稱）')}${p.role === 'admin' ? ' <span class="pill warn">管理員</span>' : ''}</td>
-        <td>${p.level ? `<span class="badge">${p.level}</span>` : '—'}</td>
+        <td>${p.level ? `<span class="badge">${esc(p.level)}</span>` : '—'}</td>
         <td>${p.verified_at ? fmt(p.verified_at) : '<span class="muted">未認證</span>'}</td>
         <td>${p.status === 'active' ? '<span class="pill ok">正常</span>' : '<span class="pill bad">停權</span>'}</td>
         <td><button class="btn small" data-open="${p.id}">查看／調整</button></td></tr>`).join('') || '<tr><td colspan="5" class="muted">找不到</td></tr>'}
@@ -618,7 +622,7 @@ async function playerDetail(id) {
   box.innerHTML = `<h2>${esc(p.display_name ?? '（未設定暱稱）')}</h2>
     <div class="form">
       <div class="row">
-        <div class="shrink"><label>目前等級</label><div style="font-size:22px;font-weight:800">${p.level ?? '—'}</div></div>
+        <div class="shrink"><label>目前等級</label><div style="font-size:22px;font-weight:800">${esc(p.level ?? '—')}</div></div>
         <div class="shrink"><label>調整成</label><select id="d-level">${LEVELS.map((l) => `<option ${l === p.level ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div><label>原因（一定要寫，會留紀錄）</label><input id="d-note"></div>
         <button class="btn gold inline" id="d-set">調整等級</button>
@@ -652,7 +656,7 @@ async function playerDetail(id) {
     <h2>被擋下的留言（違規紀錄）</h2>
     <table><tr><th>時間</th><th>類別</th><th>原文</th></tr>
       ${(chat?.violations ?? []).map((v) => `<tr><td>${fmt(v.created_at)}</td>
-        <td>${v.severe ? '<span class="pill bad">' : '<span class="pill">'}${CHAT_CAT[v.category] ?? v.category}</span></td><td>${esc(v.body)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">沒有</td></tr>'}
+        <td>${v.severe ? '<span class="pill bad">' : '<span class="pill">'}${esc(CHAT_CAT[v.category] ?? v.category)}</span></td><td>${esc(v.body)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">沒有</td></tr>'}
     </table>
     <h2>最近送出的留言</h2>
     <table><tr><th>時間</th><th>內容</th></tr>
@@ -660,13 +664,13 @@ async function playerDetail(id) {
     </table>
     <h2>實力分</h2>
     <table><tr><th>項目</th><th>實力分</th><th>場數</th><th>暫定期</th></tr>
-      ${ratings.map((r) => `<tr><td>${{ '8ball': '8 號球', '9ball': '9 號球', '10ball': '10 號球' }[r.discipline] ?? r.discipline}</td>
+      ${ratings.map((r) => `<tr><td>${{ '8ball': '8 號球', '9ball': '9 號球', '10ball': '10 號球' }[r.discipline] ?? esc(r.discipline)}</td>
         <td>${Math.round(r.rating)}</td><td>${r.games_played}</td><td>${r.provisional ? '是' : '否'}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">沒有</td></tr>'}
     </table>
     <h2>等級紀錄</h2>
     <table><tr><th>時間</th><th>變動</th><th>原因</th><th>備註</th></tr>
-      ${history.map((h) => `<tr><td>${fmt(h.created_at)}</td><td>${h.from_level ?? '—'} → ${h.to_level}</td>
-        <td>${reason[h.reason] ?? h.reason}</td><td>${esc(h.note)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">沒有</td></tr>'}
+      ${history.map((h) => `<tr><td>${fmt(h.created_at)}</td><td>${esc(h.from_level ?? '—')} → ${esc(h.to_level)}</td>
+        <td>${esc(reason[h.reason] ?? h.reason)}</td><td>${esc(h.note)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">沒有</td></tr>'}
     </table>`;
   const statusAction = async (clear, lock, ask) => {
     const note = prompt(ask + String.fromCharCode(10) + '原因（選填，會留紀錄）：', '');
@@ -739,7 +743,7 @@ async function flags() {
       ${showAll ? '<a href="#/flags">只看待處理</a>' : '<a href="#/flags?all=1">看全部（含已處理）</a>'}</p>
     <table><tr><th>時間</th><th>球員</th><th>原因</th><th>細節</th><th>狀態</th><th></th></tr>
       ${list.map((f) => `<tr><td>${fmt(f.created_at)}</td>
-        <td>${esc(f.player?.display_name)} ${f.player?.level ? `<span class="badge">${f.player.level}</span>` : ''}</td>
+        <td>${esc(f.player?.display_name)} ${f.player?.level ? `<span class="badge">${esc(f.player.level)}</span>` : ''}</td>
         <td>${esc(FLAG_TYPES[f.flag_type] ?? f.flag_type)}</td>
         <td class="hint">${esc(flagDetail(f, names))}</td>
         <td>${{ open: '<span class="pill warn">待處理</span>', dismissed: '<span class="pill">沒問題</span>', actioned: '<span class="pill ok">已處理</span>' }[f.status]}</td>
@@ -766,7 +770,7 @@ function flagDetail(f, names = {}) {
         : `前 ${d.games} 場計分對局贏了 ${d.wins} 場（${Math.round((d.wins / d.games) * 100)}%）`;
     case 'repeated_pair': return `近 90 天和 ${n(d.opponent)} 打了 ${d.games} 場，贏了 ${d.wins} 場`;
     case 'near_cap_no_promotion':
-      return `${DISC[d.discipline] ?? d.discipline}：最近 ${d.games} 場賽後分數都在 ${d.threshold} 以上（最低 ${d.min_rating}），仍是 ${d.level} 級`;
+      return `${DISC[d.discipline] ?? d.discipline}：最近 ${d.games} 場賽後分數都在 ${d.threshold} 以上（最低 ${d.min_rating}），仍是 ${esc(d.level)} 級`;
     case 'dispute_own_win': return `理由：${d.reason ?? ''}`;
     case 'chat_gambling':
     case 'chat_sexual':
@@ -827,7 +831,7 @@ async function reports() {
   page().innerHTML = `<h1>檢舉</h1>
     <table><tr><th>時間</th><th>被檢舉的球員</th><th>檢舉人</th><th>原因</th><th>狀態</th><th></th></tr>
       ${list.map((r) => `<tr><td>${fmt(r.created_at)}</td>
-        <td>${esc(r.target?.display_name)} ${r.target?.level ? `<span class="badge">${r.target.level}</span>` : ''}</td>
+        <td>${esc(r.target?.display_name)} ${r.target?.level ? `<span class="badge">${esc(r.target.level)}</span>` : ''}</td>
         <td>${esc(r.reporter?.display_name)}</td><td>${esc(r.reason)}</td>
         <td>${{ open: '<span class="pill warn">待處理</span>', reviewed: '<span class="pill ok">已處理</span>', dismissed: '<span class="pill">不成立</span>' }[r.status]}</td>
         <td>${r.status === 'open' ? `<div class="actions"><button class="btn small" data-r="${r.id}" data-s="reviewed">已處理</button>
@@ -899,7 +903,7 @@ async function otp() {
     </div>
     <p class="hint">花費是用「成功則數 × 每則單價 ${vnd(s.unit_price)}」估的，實際以 ZBS 帳單為準。
       ${s.last_sent_at ? '最近一次成功：' + fmt(s.last_sent_at) + '。' : '還沒有成功送出過。'}
-      ${s.last_failure ? `最近一次失敗：${fmt(s.last_failure.at)}（${esc(OTP_RESULT[s.last_failure.result] ?? s.last_failure.result)}${s.last_failure.zalo_error ? '，Zalo 錯誤 ' + s.last_failure.zalo_error : ''}）。` : ''}</p>
+      ${s.last_failure ? `最近一次失敗：${fmt(s.last_failure.at)}（${esc(OTP_RESULT[s.last_failure.result] ?? s.last_failure.result)}${s.last_failure.zalo_error ? '，Zalo 錯誤 ' + esc(s.last_failure.zalo_error) : ''}）。` : ''}</p>
     <table><tr><th>日期（越南時間）</th><th>成功</th><th>失敗</th><th>約花費</th></tr>
       ${(s.daily ?? []).map((d) => `<tr><td>${esc(d.day)}</td><td>${d.sent}</td><td>${d.failed ? `<span class="pill bad">${d.failed}</span>` : '0'}</td><td>${vnd(d.sent * s.unit_price)}</td></tr>`).join('')}
     </table>
@@ -949,7 +953,7 @@ async function otp() {
       const ql = out.quality;
       const needUpgrade = [out.quota_error, out.quality_error].some((e) => e && e.code === -120);
       box.innerHTML = (q
-        ? card(q.dailyQuota ?? '–', 'Zalo 每日額度') + card(q.remainingQuota ?? '–', '今天還能送',
+        ? card(esc(q.dailyQuota ?? '–'), 'Zalo 每日額度') + card(esc(q.remainingQuota ?? '–'), '今天還能送',
             '已用 ' + ((q.dailyQuota ?? 0) - (q.remainingQuota ?? 0)) + ' 則')
         : '') +
         (ql ? card(esc(QUALITY[ql.oaCurrentQuality] ?? ql.oaCurrentQuality ?? '–'), '傳送品質（目前）', '近 7 天：' + esc(QUALITY[ql.oa7dayQuality] ?? ql.oa7dayQuality ?? '–')) : '') +
@@ -1341,7 +1345,7 @@ async function feedback() {
       `<a class="btn small ${s === want ? 'gold' : ''}" href="#/feedback?status=${s}">${{ open: '待處理', in_progress: '處理中', resolved: '已解決', dismissed: '不處理', all: '全部' }[s]}</a>`).join('')}</div>
     <table><tr><th>時間</th><th>會員</th><th>類型</th><th>內容</th><th>手機／版本</th><th>狀態</th><th></th></tr>
       ${list.map((f) => `<tr><td>${fmt(f.created_at)}</td>
-        <td>${esc(f.user?.display_name ?? '（已刪除）')}${f.user?.member_no ? `<br><span class="muted">VN ${f.user.member_no}</span>` : ''}</td>
+        <td>${esc(f.user?.display_name ?? '（已刪除）')}${f.user?.member_no ? `<br><span class="muted">VN ${esc(f.user.member_no)}</span>` : ''}</td>
         <td>${esc(FB_CAT[f.category] ?? f.category)}</td>
         <td style="max-width:420px;white-space:pre-wrap">${esc(f.body)}${shots[f.id] ? `<br><a href="${esc(shots[f.id])}" target="_blank" rel="noopener">看截圖</a>` : ''}
           ${f.admin_note ? `<br><span class="muted">備註：${esc(f.admin_note)}</span>` : ''}</td>
@@ -1407,7 +1411,7 @@ async function release() {
 // =====================================================================
 // 後台角色、設定修改紀錄、商城、訂單與退款、營收報表（負責人 2026-11-26）
 // =====================================================================
-var MY_ROLE = 'super_admin'; // var：start() 可能在這行執行前就被呼叫
+var MY_ROLE = 'support'; // var：start() 可能在這行執行前就被呼叫
 var ROLE_NAMES = { super_admin: '超級管理員', operator: '營運', finance: '財務', support: '客服' };
 const ROLE_HELP = {
   super_admin: '全部權限，含指派角色、還原設定',
@@ -1424,7 +1428,7 @@ async function roles() {
     <p class="hint">管理員再分四種角色，「提出」和「核准」盡量給不同人。資料庫會檢查權限，這裡只是設定。
       要新增管理員，仍然在 Supabase 把 profiles.role 設成 admin（見 CLAUDE.md），預設是超級管理員，再到這裡調整。</p>
     <table><tr><th>管理員</th><th>會員編號</th><th>角色</th><th>可以做什麼</th></tr>
-      ${list.map((r) => `<tr><td>${esc(r.display_name)}</td><td>${r.member_no ? 'VN ' + r.member_no : '—'}</td>
+      ${list.map((r) => `<tr><td>${esc(r.display_name)}</td><td>${r.member_no ? 'VN ' + esc(r.member_no) : '—'}</td>
         <td>${canEdit ? `<select data-role-user="${r.user_id}" style="width:auto">${Object.keys(ROLE_NAMES).map((k) =>
           `<option value="${k}" ${k === r.role ? 'selected' : ''}>${ROLE_NAMES[k]}</option>`).join('')}</select>` : esc(ROLE_NAMES[r.role] ?? r.role)}</td>
         <td class="muted">${esc(ROLE_HELP[r.role] ?? '')}</td></tr>`).join('')}
@@ -1555,7 +1559,7 @@ async function orders() {
       `<a class="btn small ${s === want ? 'gold' : ''}" href="#/orders${s ? '?status=' + s : ''}">${s ? ORDER_STATUS[s][0] : '全部'}</a>`).join('')}</div>
     <table><tr><th>時間</th><th>會員</th><th>商品</th><th>價格</th><th>Google 訂單</th><th>狀態</th><th></th></tr>
       ${list.map((o) => `<tr><td>${fmt(o.created_at)}</td>
-        <td>${esc(o.display_name ?? '（已刪除）')}${o.member_no ? '<br><span class="muted">VN ' + o.member_no + '</span>' : ''}</td>
+        <td>${esc(o.display_name ?? '（已刪除）')}${o.member_no ? '<br><span class="muted">VN ' + esc(o.member_no) + '</span>' : ''}</td>
         <td>${esc(o.product_name?.zh || o.product_name?.vi || o.product_id)}<br><span class="muted">${esc(o.product_id)}</span></td>
         <td>${o.price_vnd != null ? vnd(o.price_vnd) : '—'}</td><td class="muted">${esc(o.order_id ?? '')}</td>
         <td>${orderPill(o.status)}${o.item_revoked ? '<br><span class="muted">東西已收回</span>' : ''}</td>
