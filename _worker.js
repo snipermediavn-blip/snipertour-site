@@ -16,7 +16,7 @@ const SITE = 'https://snipertour.com';
 const DEFAULT_IMAGE = { url: SITE + '/brand/cover.png', w: 1600, h: 900, type: 'image/png' };
 const TZ = 'Asia/Ho_Chi_Minh';
 const COLUMNS = 'id,name,discipline,format,race_to,status,max_players,entry_fee,registration_closes_at,starts_at,' +
-  'prize_total,cover_url,location_name,location_address,venue:venues(name,address),registrations(count)';
+  'prize_total,prize_list,cover_url,location_name,location_address,venue:venues(name,address),registrations(count)';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DISCIPLINE = { '8ball': '8 bi', '9ball': '9 bi', '10ball': '10 bi' };
 
