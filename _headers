@@ -1,0 +1,26 @@
+# Cloudflare Pages 回應標頭（安全檢查 2026-11-26）。GitHub Pages 不讀這個檔案，網域搬到 Cloudflare 後才生效。
+# /t/*（_worker.js 產生的賽事頁）由 worker 自己設標頭。
+
+/*
+  X-Content-Type-Options: nosniff
+  Strict-Transport-Security: max-age=31536000
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+/admin/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js; connect-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co wss://zcvtqzjgmhsstbyzvuyo.supabase.co; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co data: blob:; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store
+
+/zalo-callback/*
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+
+/zalo-oa-callback/*
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
+
+/pay-return/*
+  Referrer-Policy: no-referrer
+  X-Frame-Options: DENY
