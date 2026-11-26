@@ -1365,7 +1365,7 @@ async function release() {
       <p class="hint">版本號 = App「設定」最下面「版本 1.0.13」後面的建置號碼（pubspec.yaml 的 +N，例如 1.0.13+14 的 14）。</p>
       <label>最低版本號（低於這個一定要更新，0 = 不擋）<input id="rl-min" type="number" min="0" value="${Number(a.min_build ?? 0)}"></label>
       <label>最新版本號（低於這個會提醒有新版，0 = 不提醒）<input id="rl-latest" type="number" min="0" value="${Number(a.latest_build ?? 0)}"></label>
-      <label>商店網址<input id="rl-store" value="${esc(a.store_url ?? '')}"></label>
+      <label>App 在 Google Play 的下載頁（「需要更新」畫面的「立即更新」按鈕會打開這裡；和買東西無關）<input id="rl-store" value="${esc(a.store_url ?? '')}"></label>
       <p class="hint">⚠️ 最低版本號調高前，先確認新版已經在 Google Play 上架，不然大家會被擋在外面又沒有新版可以下載。</p>
     </div>
     <h2>維護模式</h2>
