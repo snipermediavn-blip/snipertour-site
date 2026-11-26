@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="4096" height="4096" viewBox="0 0 4096 4096" fill="none" role="img" aria-labelledby="pool-10-title pool-10-description">
+  <title id="pool-10-title">10 號撞球 — 寶藍條紋</title>
+  <desc id="pool-10-description">Premium glossy blue striped pool ball 10. Transparent background, scalable vector artwork. Numerals are vector paths.</desc>
+  <defs>
+    <clipPath id="pool-10-clip"><circle cx="2048" cy="2048" r="1760"/></clipPath>
+    <radialGradient id="pool-10-color" cx="1344" cy="1062" r="3098" fx="1344" fy="1062" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6DADFF"/>
+      <stop offset="0.35" stop-color="#175CDA"/>
+      <stop offset="0.70" stop-color="#123994"/>
+      <stop offset="1" stop-color="#061334"/>
+    </radialGradient>
+    <radialGradient id="pool-10-ivory" cx="0.30" cy="0.22" r="0.90">
+      <stop offset="0" stop-color="#FFFEF7"/>
+      <stop offset="0.40" stop-color="#F5F1E4"/>
+      <stop offset="0.73" stop-color="#D5CCB5"/>
+      <stop offset="1" stop-color="#81745F"/>
+    </radialGradient>
+    <radialGradient id="pool-10-number-disc" cx="0.30" cy="0.21" r="1.05">
+      <stop offset="0" stop-color="#FFFFF8"/>
+      <stop offset="0.48" stop-color="#F9F4E4"/>
+      <stop offset="1" stop-color="#C5BAA1"/>
+    </radialGradient>
+    <linearGradient id="pool-10-ink" x1="1600" y1="1560" x2="2420" y2="2590" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25272A"/>
+      <stop offset="0.45" stop-color="#101216"/>
+      <stop offset="1" stop-color="#030508"/>
+    </linearGradient>
+    <radialGradient id="pool-10-edge-shade" cx="0.47" cy="0.43" r="0.56">
+      <stop offset="0.65" stop-color="#02050B" stop-opacity="0"/>
+      <stop offset="0.88" stop-color="#02050B" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#02050B" stop-opacity="0.37"/>
+    </radialGradient>
+    <linearGradient id="pool-10-softbox" x1="1060" y1="720" x2="1560" y2="1600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="0.33" stop-color="#FFFFFF" stop-opacity="0.68"/>
+      <stop offset="0.75" stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="pool-10-soft-glow" cx="0.33" cy="0.24" r="0.45">
+      <stop stop-color="#FFFFFF" stop-opacity="0.17"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pool-10-rim" x1="1200" y1="300" x2="2800" y2="3710" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.54"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="0.72" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="pool-10-right-reflection" x1="3520" y1="1150" x2="3650" y2="2850" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4EDFF" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#EDF3FF" stop-opacity="0.52"/>
+      <stop offset="0.74" stop-color="#EDF3FF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#EDF3FF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="pool-10-bottom-bounce" cx="0.38" cy="0.90" r="0.48">
+      <stop stop-color="#D0DEEE" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#D0DEEE" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#pool-10-clip)">
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-10-ivory)"/>
+    <path d="M0 1380C1100 1240 2996 1240 4096 1380V2735C2996 2875 1100 2875 0 2735Z" fill="url(#pool-10-color)"/>
+    <circle cx="2048" cy="2048" r="740" fill="url(#pool-10-number-disc)"/>
+    <circle cx="2048" cy="2048" r="738" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="4"/>
+    <path d="M1852.761 2436.599 L1701.833 2436.599 L1701.833 1867.8 C1646.69 1919.362 1581.699 1957.497 1506.862 1982.204 L1506.862 1845.241 C1546.25 1832.351 1589.04 1807.912 1635.231 1771.926 C1681.423 1735.939 1713.112 1693.955 1730.3 1645.974 L1852.761 1645.974 Z M2333.474 1645.974 C2409.743 1645.974 2469.362 1673.187 2512.331 1727.614 C2563.535 1792.067 2589.138 1898.952 2589.138 2048.269 C2589.138 2197.227 2563.356 2304.291 2511.794 2369.46 C2469.183 2423.171 2409.743 2450.026 2333.474 2450.026 C2256.846 2450.026 2195.078 2420.575 2148.171 2361.672 C2101.263 2302.769 2077.81 2197.764 2077.81 2046.657 C2077.81 1898.415 2103.591 1791.709 2155.153 1726.54 C2197.764 1672.829 2257.204 1645.974 2333.474 1645.974 Z M2333.474 1771.12 C2315.212 1771.12 2298.919 1776.939 2284.597 1788.576 C2270.274 1800.214 2259.173 1821.071 2251.296 1851.149 C2240.912 1890.179 2235.72 1955.886 2235.72 2048.269 C2235.72 2140.651 2240.375 2204.12 2249.685 2238.674 C2258.994 2273.228 2270.721 2296.234 2284.865 2307.692 C2299.009 2319.151 2315.212 2324.88 2333.474 2324.88 C2351.735 2324.88 2368.028 2319.061 2382.351 2307.424 C2396.673 2295.786 2407.774 2274.929 2415.651 2244.851 C2426.035 2206.179 2431.228 2140.651 2431.228 2048.269 C2431.228 1955.886 2426.573 1892.417 2417.263 1857.863 C2407.953 1823.309 2396.226 1800.214 2382.082 1788.576 C2367.938 1776.939 2351.735 1771.12 2333.474 1771.12 Z" fill="url(#pool-10-ink)" fill-rule="evenodd"/>
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-10-edge-shade)"/>
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-10-soft-glow)"/>
+    <path d="M748 1318C912 1024 1184 792 1487 667C1685 651 1855 700 1992 794C1685 974 1410 1210 1200 1504C1028 1493 866 1428 748 1318Z" fill="url(#pool-10-softbox)"/>
+    <path d="M3350 1004C3576 1273 3704 1634 3702 2021C3700 2367 3616 2662 3465 2908C3594 2532 3646 2198 3622 1877C3598 1550 3503 1234 3350 1004Z" fill="url(#pool-10-right-reflection)"/>
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-10-bottom-bounce)"/>
+    <circle cx="2048" cy="2048" r="1753" stroke="url(#pool-10-rim)" stroke-width="14"/>
+  </g>
+</svg>

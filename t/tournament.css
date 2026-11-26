@@ -1,49 +1,152 @@
-/* 公開賽事頁：配色和 App 的「探索賽事／賽事詳情」一樣（帶深綠的深色、金色重點） */
+/* 公開賽事頁（2026-11-26 改版：照 App 的 Design System——主背景 #081710、品牌深綠 #143625、卡片 #192B22、
+   強調綠 #32E875、榮耀金 #C9A45C、文字 #F2F6F3；越南文字型 Be Vietnam Pro）。手機為主，最寬 560px。 */
+@font-face { font-family: "Be Vietnam Pro"; src: url("/t/BeVietnamPro-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Be Vietnam Pro"; src: url("/t/BeVietnamPro-SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Be Vietnam Pro"; src: url("/t/BeVietnamPro-ExtraBold.ttf") format("truetype"); font-weight: 800; font-display: swap; }
+
 :root {
-  --bg: #0f1513; --surface: #172019; --border: #26302b; --gold: #d6b66f; --on-gold: #111111;
-  --text: #f1f0e9; --sub: #a2b2a9; --ok: #9fd2af; --ok-text: #0e2a1b; --info: #a7c5e9; --info-text: #10233a;
-  --muted-tag: #3a443f; --error: #ff9a8d;
+  --bg: #081710; --brand: #143625; --card: #192b22; --card-hi: #1f3529; --line: rgba(242, 246, 243, .08);
+  --accent: #32e875; --gold: #c9a45c; --gold-hi: #e6c98a; --gold-lo: #a8843f;
+  --text: #f2f6f3; --sub: #9db0a5; --faint: #6f8378; --danger: #ff8a7a;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
-body { font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif; -webkit-text-size-adjust: 100%; }
-main { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: 120px; }
-a { color: var(--gold); }
+body {
+  font: 15px/1.5 "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%; -webkit-font-smoothing: antialiased; overflow-x: clip;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(50, 232, 117, .07), transparent 60%),
+    var(--bg);
+}
+main { max-width: 560px; margin: 0 auto; min-height: 100vh; padding-bottom: 150px; }
+a { color: inherit; }
+.num { font-variant-numeric: tabular-nums; }
 
 .loading { padding: 40vh 16px 0; text-align: center; color: var(--sub); }
 
-.cover { position: relative; aspect-ratio: 16 / 9; background: #17402f; overflow: hidden; }
-.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(15,21,19,0) 45%, var(--bg) 100%); }
-.brand { position: absolute; top: 12px; left: 16px; z-index: 1; font-weight: 800; letter-spacing: 2px; color: var(--gold); text-decoration: none; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+/* 頂列：品牌 */
+.top { position: absolute; top: 0; left: 0; right: 0; z-index: 3; display: flex; align-items: center; gap: 10px; padding: 14px 16px; }
+.top .logo { width: 30px; height: 30px; border-radius: 9px; display: block; box-shadow: 0 2px 10px rgba(0, 0, 0, .45); }
+.top .word { font-weight: 800; letter-spacing: .14em; font-size: 15px; text-decoration: none; text-shadow: 0 1px 8px rgba(0, 0, 0, .7); }
+.top .open-app {
+  margin-left: auto; text-decoration: none; font-size: 13px; font-weight: 600; padding: 7px 12px; border-radius: 999px;
+  background: rgba(8, 23, 16, .55); border: 1px solid rgba(242, 246, 243, .18); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
 
-.head { padding: 0 16px; margin-top: -28px; position: relative; z-index: 1; }
-.tag { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 13px; font-weight: 800; }
-.tag.open { background: var(--ok); color: var(--ok-text); }
-.tag.live { background: var(--info); color: var(--info-text); }
-.tag.closed { background: var(--muted-tag); color: var(--text); }
-.tag.full { background: #6a2a27; color: #ffc7c0; margin-left: 6px; }
-h1 { font-size: 24px; line-height: 1.25; margin: 10px 0 16px; overflow-wrap: anywhere; }
+/* 封面（有封面用封面；沒有就畫球檯） */
+.hero { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--brand); }
+.hero img.cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hero::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 23, 16, .55) 0%, rgba(8, 23, 16, 0) 28%, rgba(8, 23, 16, 0) 52%, var(--bg) 100%); pointer-events: none; }
+.felt {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(70% 80% at 50% 45%, #1d6a43 0%, #145034 45%, #0c3322 80%, #08231a 100%);
+}
+.felt::before { /* 檯布紋理 */
+  content: ""; position: absolute; inset: 0; opacity: .25; mix-blend-mode: overlay;
+  background-image: repeating-linear-gradient(115deg, rgba(255, 255, 255, .05) 0 1px, transparent 1px 3px);
+}
+.felt .spot { position: absolute; left: 50%; top: 46%; width: 62%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, .10), transparent 65%); }
+.felt .ball { position: absolute; width: 12.5%; aspect-ratio: 1; filter: drop-shadow(0 6px 6px rgba(0, 0, 0, .45)); }
+.felt .label {
+  position: absolute; right: 16px; bottom: 30%; font-weight: 800; font-size: 13px; letter-spacing: .12em; text-transform: uppercase;
+  color: rgba(242, 246, 243, .55);
+}
 
-.card { margin: 0 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; }
-.row { display: flex; gap: 12px; padding: 13px 16px; border-top: 1px solid var(--border); }
-.row:first-child { border-top: 0; }
-.row .k { color: var(--sub); flex: 0 0 auto; }
-.row .v { margin-left: auto; text-align: right; font-weight: 700; overflow-wrap: anywhere; }
-.row .v small { display: block; font-weight: 400; color: var(--sub); font-size: 13px; }
+/* 標題 */
+.head { padding: 0 16px; margin-top: -44px; position: relative; z-index: 2; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: rgba(242, 246, 243, .1); color: var(--text); }
+.chip.open { background: rgba(50, 232, 117, .14); color: var(--accent); }
+.chip.open::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px rgba(50, 232, 117, .2); }
+.chip.live { background: rgba(120, 180, 255, .16); color: #9cc8ff; }
+.chip.full { background: rgba(255, 138, 122, .14); color: var(--danger); }
+h1 { font-size: 25px; line-height: 1.22; font-weight: 800; margin: 0; overflow-wrap: anywhere; letter-spacing: -.01em; }
+.where { margin: 6px 0 0; color: var(--sub); font-size: 14px; }
 
-.prize { margin: 16px 16px 0; padding: 16px; border-radius: 16px; background: #17402f; border: 1px solid #24563f; text-align: center; }
-.prize .k { color: var(--gold); font-size: 14px; }
-.prize .v { color: var(--gold); font-size: 26px; font-weight: 900; }
+/* 三格重點 */
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 18px 16px 0; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 11px 12px; min-width: 0; }
+.stat .k { font-size: 12px; color: var(--sub); }
+.stat .v { font-size: 17px; font-weight: 800; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat .bar { height: 4px; border-radius: 4px; background: rgba(242, 246, 243, .1); margin-top: 7px; overflow: hidden; }
+.stat .bar i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
 
-.note { margin: 16px; color: var(--sub); font-size: 14px; text-align: center; }
+/* 獎金 */
+.prize {
+  margin: 14px 16px 0; padding: 16px; border-radius: 18px; position: relative; overflow: hidden;
+  background: linear-gradient(160deg, #1c3a2a 0%, #12281d 100%);
+  border: 1px solid rgba(201, 164, 92, .45);
+}
+.prize::before { content: ""; position: absolute; inset: -40% -20% auto auto; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(201, 164, 92, .22), transparent 65%); }
+.prize .k { position: relative; display: flex; align-items: center; gap: 8px; color: var(--gold); font-size: 13px; font-weight: 600; }
+.prize .total { position: relative; font-size: 30px; font-weight: 800; margin-top: 2px; color: var(--gold-hi); letter-spacing: -.01em; }
+.podium { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.place { background: rgba(8, 23, 16, .45); border: 1px solid var(--line); border-radius: 12px; padding: 10px 8px; text-align: center; min-width: 0; }
+.place .medal { width: 26px; height: 26px; border-radius: 50%; margin: 0 auto 6px; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #1b1406; }
+.place:nth-child(1) .medal { background: linear-gradient(180deg, #f3d892, #c9a45c); }
+.place:nth-child(2) .medal { background: linear-gradient(180deg, #eef1f3, #a9b3ba); }
+.place:nth-child(3) .medal { background: linear-gradient(180deg, #e8b58c, #a86d45); }
+.place .n { font-size: 12px; color: var(--sub); }
+.place .a { font-size: 14px; font-weight: 800; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.place .g { font-size: 11.5px; color: var(--sub); margin-top: 2px; overflow-wrap: anywhere; }
 
-.bar { position: fixed; left: 0; right: 0; bottom: 0; background: rgba(15,21,19,.96); border-top: 1px solid var(--border); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); }
-.bar-in { max-width: 528px; margin: 0 auto; }
-.btn { display: block; width: 100%; text-align: center; text-decoration: none; font-weight: 800; font-size: 16px; padding: 15px; border-radius: 12px; background: linear-gradient(180deg, #e3c682, #c9a55a); color: var(--on-gold); }
-.btn.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-.store { display: block; text-align: center; margin-top: 8px; font-size: 13px; color: var(--sub); }
+/* 區塊標題（金色直線＋白字，和 App 一樣） */
+.section { margin: 26px 16px 10px; font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.section::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: var(--gold); }
 
-.empty { padding: 30vh 24px 0; text-align: center; }
-.empty h1 { margin: 0 0 8px; }
-.empty p { color: var(--sub); margin: 0 0 24px; }
+/* 資訊列 */
+.list { margin: 0 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.item { display: flex; gap: 12px; align-items: flex-start; padding: 13px 14px; text-decoration: none; }
+.item + .item { border-top: 1px solid var(--line); }
+.item .ic { flex: 0 0 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: rgba(50, 232, 117, .1); color: var(--accent); }
+.item .ic svg { width: 18px; height: 18px; }
+.item .body { min-width: 0; flex: 1; }
+.item .k { font-size: 12.5px; color: var(--sub); }
+.item .v { font-weight: 600; overflow-wrap: anywhere; }
+.item .s { font-size: 13px; color: var(--sub); overflow-wrap: anywhere; }
+.item .go { align-self: center; color: var(--faint); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.item .go.accent { color: var(--accent); }
+
+/* App 介紹 */
+.promo { margin: 22px 16px 0; padding: 16px; border-radius: 18px; background: var(--brand); border: 1px solid var(--line); display: flex; gap: 14px; align-items: center; }
+.promo img { width: 52px; height: 52px; border-radius: 14px; flex: 0 0 auto; }
+.promo b { display: block; font-size: 15px; }
+.promo span { display: block; font-size: 13px; color: var(--sub); margin-top: 2px; }
+
+.note { margin: 16px; color: var(--sub); font-size: 13.5px; text-align: center; }
+
+/* 底部按鈕 */
+.dock {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(8, 23, 16, 0) 0%, rgba(8, 23, 16, .92) 30%, var(--bg) 100%);
+}
+.dock-in { max-width: 528px; margin: 0 auto; }
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 54px; text-decoration: none;
+  font-weight: 800; font-size: 16px; border-radius: 14px; color: #17120a;
+  background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 55%, var(--gold-lo) 100%);
+  box-shadow: 0 10px 24px rgba(201, 164, 92, .28), inset 0 1px 0 rgba(255, 255, 255, .45);
+}
+.btn:active { transform: translateY(1px); }
+.btn.secondary { background: var(--card-hi); color: var(--text); box-shadow: none; border: 1px solid rgba(242, 246, 243, .14); }
+.store { display: block; text-align: center; margin-top: 9px; font-size: 12.5px; color: var(--sub); text-decoration: none; }
+.store u { text-decoration-color: rgba(157, 176, 165, .5); text-underline-offset: 2px; }
+
+/* 找不到／讀不到 */
+.empty { padding: 26vh 24px 0; text-align: center; }
+.empty .ic { width: 64px; height: 64px; border-radius: 20px; margin: 0 auto 18px; display: grid; place-items: center; background: var(--card); border: 1px solid var(--line); color: var(--gold); }
+.empty .ic svg { width: 30px; height: 30px; }
+.empty h1 { font-size: 22px; margin: 0 0 8px; }
+.empty p { color: var(--sub); margin: 0 auto 24px; max-width: 320px; }
+.empty .btn { max-width: 320px; margin: 0 auto; }
+
+@media (min-width: 561px) {
+  .hero { border-radius: 0 0 24px 24px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .head, .stats, .prize, .list { animation: rise .45s cubic-bezier(.2, .7, .2, 1) both; }
+  .stats { animation-delay: .05s; } .prize { animation-delay: .1s; } .list { animation-delay: .15s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+}

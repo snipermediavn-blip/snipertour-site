@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="4096" height="4096" viewBox="0 0 4096 4096" fill="none" role="img" aria-labelledby="pool-08-title pool-08-description">
+  <title id="pool-08-title">8 號撞球 — 曜黑實色</title>
+  <desc id="pool-08-description">Premium glossy black solid pool ball 8. Transparent background, scalable vector artwork. Numerals are vector paths.</desc>
+  <defs>
+    <clipPath id="pool-08-clip"><circle cx="2048" cy="2048" r="1760"/></clipPath>
+    <radialGradient id="pool-08-color" cx="1344" cy="1062" r="3098" fx="1344" fy="1062" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#555A63"/>
+      <stop offset="0.35" stop-color="#15181E"/>
+      <stop offset="0.70" stop-color="#080B10"/>
+      <stop offset="1" stop-color="#020407"/>
+    </radialGradient>
+    <radialGradient id="pool-08-ivory" cx="0.30" cy="0.22" r="0.90">
+      <stop offset="0" stop-color="#FFFEF7"/>
+      <stop offset="0.40" stop-color="#F5F1E4"/>
+      <stop offset="0.73" stop-color="#D5CCB5"/>
+      <stop offset="1" stop-color="#81745F"/>
+    </radialGradient>
+    <radialGradient id="pool-08-number-disc" cx="0.30" cy="0.21" r="1.05">
+      <stop offset="0" stop-color="#FFFFF8"/>
+      <stop offset="0.48" stop-color="#F9F4E4"/>
+      <stop offset="1" stop-color="#C5BAA1"/>
+    </radialGradient>
+    <linearGradient id="pool-08-ink" x1="1600" y1="1560" x2="2420" y2="2590" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25272A"/>
+      <stop offset="0.45" stop-color="#101216"/>
+      <stop offset="1" stop-color="#030508"/>
+    </linearGradient>
+    <radialGradient id="pool-08-edge-shade" cx="0.47" cy="0.43" r="0.56">
+      <stop offset="0.65" stop-color="#02050B" stop-opacity="0"/>
+      <stop offset="0.88" stop-color="#02050B" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#02050B" stop-opacity="0.37"/>
+    </radialGradient>
+    <linearGradient id="pool-08-softbox" x1="1060" y1="720" x2="1560" y2="1600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="0.33" stop-color="#FFFFFF" stop-opacity="0.68"/>
+      <stop offset="0.75" stop-color="#FFFFFF" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="pool-08-soft-glow" cx="0.33" cy="0.24" r="0.45">
+      <stop stop-color="#FFFFFF" stop-opacity="0.17"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pool-08-rim" x1="1200" y1="300" x2="2800" y2="3710" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.54"/>
+      <stop offset="0.35" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="0.72" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.02"/>
+    </linearGradient>
+    <linearGradient id="pool-08-right-reflection" x1="3520" y1="1150" x2="3650" y2="2850" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4EDFF" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#EDF3FF" stop-opacity="0.52"/>
+      <stop offset="0.74" stop-color="#EDF3FF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#EDF3FF" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="pool-08-bottom-bounce" cx="0.38" cy="0.90" r="0.48">
+      <stop stop-color="#D0DEEE" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#D0DEEE" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#pool-08-clip)">
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-08-color)"/>
+    <circle cx="2048" cy="2048" r="740" fill="url(#pool-08-number-disc)"/>
+    <circle cx="2048" cy="2048" r="738" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="4"/>
+    <path d="M1920.705 2011.477 C1881.675 1995.005 1853.298 1972.357 1835.573 1943.532 C1817.849 1914.707 1808.986 1883.107 1808.986 1848.732 C1808.986 1790.008 1829.486 1741.49 1870.485 1703.176 C1911.485 1664.862 1969.761 1645.705 2045.314 1645.705 C2120.152 1645.705 2178.249 1664.862 2219.606 1703.176 C2260.964 1741.49 2281.643 1790.008 2281.643 1848.732 C2281.643 1885.256 2272.154 1917.751 2253.176 1946.218 C2234.198 1974.685 2207.521 1996.438 2173.146 2011.477 C2216.831 2029.022 2250.042 2054.624 2272.78 2088.283 C2295.518 2121.942 2306.887 2160.793 2306.887 2204.836 C2306.887 2277.525 2283.701 2336.607 2237.331 2382.082 C2190.96 2427.557 2129.282 2450.295 2052.297 2450.295 C1980.682 2450.295 1921.063 2431.496 1873.439 2393.898 C1817.222 2349.497 1789.113 2288.625 1789.113 2211.281 C1789.113 2168.67 1799.676 2129.551 1820.803 2093.923 C1841.929 2058.294 1875.23 2030.813 1920.705 2011.477 Z M1951.857 1859.475 C1951.857 1889.553 1960.362 1913.006 1977.37 1929.836 C1994.379 1946.665 2017.027 1955.08 2045.314 1955.08 C2073.96 1955.08 2096.877 1946.576 2114.064 1929.567 C2131.252 1912.559 2139.846 1889.016 2139.846 1858.938 C2139.846 1830.65 2131.341 1808.002 2114.333 1790.993 C2097.324 1773.985 2074.855 1765.48 2046.926 1765.48 C2017.922 1765.48 1994.826 1774.074 1977.639 1791.262 C1960.451 1808.449 1951.857 1831.187 1951.857 1859.475 Z M1937.893 2196.779 C1937.893 2238.316 1948.545 2270.721 1969.851 2293.996 C1991.156 2317.271 2017.743 2328.908 2049.611 2328.908 C2080.764 2328.908 2106.545 2317.718 2126.955 2295.339 C2147.365 2272.959 2157.57 2240.643 2157.57 2198.391 C2157.57 2161.509 2147.186 2131.878 2126.418 2109.499 C2105.65 2087.119 2079.331 2075.93 2047.463 2075.93 C2010.581 2075.93 1983.099 2088.641 1965.017 2114.064 C1946.934 2139.488 1937.893 2167.059 1937.893 2196.779 Z" fill="url(#pool-08-ink)" fill-rule="evenodd"/>
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-08-edge-shade)"/>
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-08-soft-glow)"/>
+    <path d="M748 1318C912 1024 1184 792 1487 667C1685 651 1855 700 1992 794C1685 974 1410 1210 1200 1504C1028 1493 866 1428 748 1318Z" fill="url(#pool-08-softbox)"/>
+    <path d="M3350 1004C3576 1273 3704 1634 3702 2021C3700 2367 3616 2662 3465 2908C3594 2532 3646 2198 3622 1877C3598 1550 3503 1234 3350 1004Z" fill="url(#pool-08-right-reflection)"/>
+    <circle cx="2048" cy="2048" r="1760" fill="url(#pool-08-bottom-bounce)"/>
+    <circle cx="2048" cy="2048" r="1753" stroke="url(#pool-08-rim)" stroke-width="14"/>
+  </g>
+</svg>
