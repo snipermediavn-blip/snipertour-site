@@ -158,7 +158,7 @@ $('#mfa-cancel').onclick = async () => { await db.auth.signOut(); location.hash 
 // ---------------------------------------------------------------------
 // 頁面切換
 // ---------------------------------------------------------------------
-const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, otp, rules, ads, push };
+const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, feedback, otp, rules, release, ads, push };
 function route() {
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
@@ -1303,4 +1303,92 @@ async function lucky() {
   };
 
   await loadAssigned();
+}
+
+// ---------------------------------------------------------------------
+// 問題回報（上架前 2026-11-26）：App「設定 → 回報問題」送來的；截圖不公開，用 15 分鐘的臨時網址看
+// ---------------------------------------------------------------------
+const FB_CAT = { bug: '錯誤', suggestion: '建議', payment: '付款', account: '帳號', other: '其他' };
+const FB_STATUS = {
+  open: '<span class="pill warn">待處理</span>', in_progress: '<span class="pill">處理中</span>',
+  resolved: '<span class="pill ok">已解決</span>', dismissed: '<span class="pill">不處理</span>',
+};
+async function feedback() {
+  const want = new URLSearchParams(location.hash.split('?')[1]).get('status') ?? 'open';
+  let q = db.from('feedback').select('*, user:profiles!feedback_user_id_fkey(display_name, member_no)')
+    .order('created_at', { ascending: false }).limit(200);
+  if (want !== 'all') q = q.eq('status', want);
+  const list = await run(q);
+  const shots = {};
+  await Promise.all(list.filter((f) => f.screenshot).map(async (f) => {
+    const { data } = await db.storage.from('feedback').createSignedUrl(f.screenshot, 900);
+    shots[f.id] = data?.signedUrl;
+  }));
+  page().innerHTML = `<h1>問題回報</h1>
+    <p class="hint">會員在 App「設定 → 回報問題」送來的。每人每天最多 5 則（app_config.feedback）。</p>
+    <div class="actions">${['open', 'in_progress', 'resolved', 'dismissed', 'all'].map((s) =>
+      `<a class="btn small ${s === want ? 'gold' : ''}" href="#/feedback?status=${s}">${{ open: '待處理', in_progress: '處理中', resolved: '已解決', dismissed: '不處理', all: '全部' }[s]}</a>`).join('')}</div>
+    <table><tr><th>時間</th><th>會員</th><th>類型</th><th>內容</th><th>手機／版本</th><th>狀態</th><th></th></tr>
+      ${list.map((f) => `<tr><td>${fmt(f.created_at)}</td>
+        <td>${esc(f.user?.display_name ?? '（已刪除）')}${f.user?.member_no ? `<br><span class="muted">VN ${f.user.member_no}</span>` : ''}</td>
+        <td>${esc(FB_CAT[f.category] ?? f.category)}</td>
+        <td style="max-width:420px;white-space:pre-wrap">${esc(f.body)}${shots[f.id] ? `<br><a href="${esc(shots[f.id])}" target="_blank" rel="noopener">看截圖</a>` : ''}
+          ${f.admin_note ? `<br><span class="muted">備註：${esc(f.admin_note)}</span>` : ''}</td>
+        <td class="muted">${esc(f.device ?? '')}<br>${esc(f.os_version ?? '')}<br>${esc(f.app_version ?? '')} · ${esc(f.locale ?? '')}<br>${esc(f.route ?? '')}</td>
+        <td>${FB_STATUS[f.status] ?? esc(f.status)}</td>
+        <td><div class="actions">${['in_progress', 'resolved', 'dismissed'].filter((s) => s !== f.status).map((s) =>
+          `<button class="btn small" data-fb="${f.id}" data-s="${s}">${{ in_progress: '處理中', resolved: '已解決', dismissed: '不處理' }[s]}</button>`).join('')}</div></td></tr>`).join('') ||
+        '<tr><td colspan="7" class="muted">沒有回報</td></tr>'}
+    </table>`;
+  page().querySelectorAll('[data-fb]').forEach((b) => (b.onclick = async () => {
+    const note = b.dataset.s === 'in_progress' ? null : (prompt('備註（選填）') ?? null);
+    await run(db.rpc('admin_handle_feedback', { p_id: Number(b.dataset.fb), p_status: b.dataset.s, p_note: note || null }), '已更新');
+    feedback();
+  }));
+}
+
+// ---------------------------------------------------------------------
+// 版本與維護（上架前 2026-11-26）：app_config.app_status
+//   最低版本：低於這個版本號（pubspec 的 +N）的 App 一定要更新才能用
+//   最新版本：低於這個會提醒有新版（可以略過）
+//   維護模式：打開後 App 顯示維護畫面（管理員照常可以用）
+// ---------------------------------------------------------------------
+async function release() {
+  const row = (await run(db.from('app_config').select('value').eq('key', 'app_status').maybeSingle()));
+  const v = row?.value ?? {};
+  const a = v.android ?? {};
+  const m = v.maintenance ?? {};
+  const msg = m.message ?? {};
+  page().innerHTML = `<h1>版本與維護</h1>
+    <h2>強制更新（Android）</h2>
+    <div class="form">
+      <p class="hint">版本號 = App「設定」最下面「版本 1.0.13」後面的建置號碼（pubspec.yaml 的 +N，例如 1.0.13+14 的 14）。</p>
+      <label>最低版本號（低於這個一定要更新，0 = 不擋）<input id="rl-min" type="number" min="0" value="${Number(a.min_build ?? 0)}"></label>
+      <label>最新版本號（低於這個會提醒有新版，0 = 不提醒）<input id="rl-latest" type="number" min="0" value="${Number(a.latest_build ?? 0)}"></label>
+      <label>商店網址<input id="rl-store" value="${esc(a.store_url ?? '')}"></label>
+      <p class="hint">⚠️ 最低版本號調高前，先確認新版已經在 Google Play 上架，不然大家會被擋在外面又沒有新版可以下載。</p>
+    </div>
+    <h2>維護模式</h2>
+    <div class="form">
+      <label class="switch"><input type="checkbox" id="rl-maint" ${m.enabled ? 'checked' : ''}>
+        <span style="font-size:15px;color:var(--text)">維護中（會員打開 App 只看到維護畫面；管理員照常可以用）</span></label>
+      <label>越南文說明（空白 = 預設文字）<input id="rl-vi" value="${esc(msg.vi ?? '')}"></label>
+      <label>中文說明<input id="rl-zh" value="${esc(msg.zh ?? '')}"></label>
+      <label>英文說明<input id="rl-en" value="${esc(msg.en ?? '')}"></label>
+    </div>
+    <div class="actions"><button class="btn gold inline" id="rl-save">儲存</button></div>`;
+  $('#rl-save').onclick = async () => {
+    const min = Math.max(0, parseInt($('#rl-min').value, 10) || 0);
+    const latest = Math.max(0, parseInt($('#rl-latest').value, 10) || 0);
+    const maint = $('#rl-maint').checked;
+    if (maint && !m.enabled && !confirm('確定要打開維護模式？所有會員會馬上看到維護畫面。')) return;
+    if (min > Number(a.min_build ?? 0) && !confirm(`確定把最低版本號調到 ${min}？版本比這個舊的會員都要先更新才能用。`)) return;
+    const value = {
+      ...v,
+      android: { ...a, min_build: min, latest_build: Math.max(latest, min), store_url: $('#rl-store').value.trim() },
+      maintenance: { ...m, enabled: maint, message: { vi: $('#rl-vi').value.trim(), zh: $('#rl-zh').value.trim(), en: $('#rl-en').value.trim() } },
+    };
+    await run(db.from('app_config').update({ value }).eq('key', 'app_status'), '已儲存');
+    release();
+  };
 }
