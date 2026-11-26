@@ -9,7 +9,7 @@
   <meta name="referrer" content="no-referrer">
   <!-- 不能被別的網站用 iframe 嵌入（GitHub Pages 不能送 X-Frame-Options，用這段擋） -->
   <style>html.framed body { display: none !important; }</style>
-  <title>Sniper 管理後台</title>
+  <title>WQW 管理後台</title>
   <link rel="stylesheet" href="admin.css">
   <script src="frame-guard.js"></script>
   <!-- integrity：CDN 上的檔案被改過就不會執行 -->
@@ -20,7 +20,7 @@
   <!-- 登入 -->
   <section id="login" class="login hidden">
     <div class="login-card">
-      <div class="brand">◎ SNIPER <span>管理後台</span></div>
+      <div class="brand">◎ WQW <span>管理後台</span></div>
       <div id="login-phone-step">
         <label>手機號碼</label>
         <input id="login-phone" type="tel" placeholder="0901 234 567" autocomplete="tel">
@@ -52,7 +52,7 @@
   <!-- 後台 -->
   <section id="app" class="app hidden">
     <nav class="side">
-      <div class="brand">◎ SNIPER <span>管理後台</span></div>
+      <div class="brand">◎ WQW <span>管理後台</span></div>
       <a href="#/overview" data-page="overview">總覽</a>
       <a href="#/levels" data-page="levels">等級審核</a>
       <a href="#/venues" data-page="venues">球館與員工</a>
@@ -64,8 +64,13 @@
       <a href="#/reports" data-page="reports">檢舉</a>
       <a href="#/feedback" data-page="feedback">問題回報</a>
       <a href="#/otp" data-page="otp">驗證碼</a>
-      <a href="#/rules" data-page="rules">積分規則與設定</a>
-      <a href="#/release" data-page="release">版本與維護</a>
+      <a href="#/rules" data-page="rules" data-roles="operator">積分規則與設定</a>
+      <a href="#/release" data-page="release" data-roles="operator">版本與維護</a>
+      <a href="#/configlog" data-page="configlog">設定修改紀錄</a>
+      <a href="#/store" data-page="store" data-roles="operator">商城</a>
+      <a href="#/orders" data-page="orders" data-roles="finance">訂單與退款</a>
+      <a href="#/revenue" data-page="revenue" data-roles="finance">營收報表</a>
+      <a href="#/roles" data-page="roles">後台角色</a>
       <a href="#/ads" data-page="ads">廣告</a>
       <a href="#/push" data-page="push">推播</a>
       <div class="side-foot">

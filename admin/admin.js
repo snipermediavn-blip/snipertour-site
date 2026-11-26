@@ -1,4 +1,4 @@
-// Sniper 管理後台（CLAUDE.md 第 4.C 節）— 只有平台管理員（profiles.role = admin）能用。
+// WQW 管理後台（CLAUDE.md 第 4.C 節）— 只有平台管理員（profiles.role = admin）能用。
 // 所有權限都在資料庫（RLS 與伺服器端函式）檢查，這個網頁只是操作介面。
 'use strict';
 
@@ -22,6 +22,10 @@ const ERRORS = {
   match_not_ready: '這場還不能改比分',
   not_pending: '這筆已經審核過了',
   already_verified: '這位球員已經通過認證（可能已在球館當面認證）',
+  role_not_allowed: '你的後台角色沒有這個權限（請超級管理員調整）',
+  last_super_admin: '至少要留一位超級管理員',
+  not_an_admin: '這個人不是管理員',
+  nothing_to_restore: '這筆是新增的設定，沒有「改之前」可以還原',
 };
 function errText(e) {
   const m = String(e?.message ?? e ?? '');
@@ -99,6 +103,13 @@ async function start() {
     return;
   }
   $('#me-name').textContent = me.display_name || '管理員';
+  // 後台角色（2026-11-26）：依角色藏起用不到的頁面（真正的權限在資料庫檢查）
+  MY_ROLE = (await db.rpc('admin_role')).data || 'super_admin';
+  $('#me-name').textContent += '（' + (ROLE_NAMES[MY_ROLE] || MY_ROLE) + '）';
+  document.querySelectorAll('.side a[data-roles]').forEach((a) => {
+    const ok = MY_ROLE === 'super_admin' || a.dataset.roles.split(',').includes(MY_ROLE);
+    a.classList.toggle('hidden', !ok);
+  });
   $('#login').classList.add('hidden');
   $('#app').classList.remove('hidden');
   route();
@@ -121,7 +132,7 @@ async function showMfa() {
   const verified = (f?.totp ?? []).find((x) => x.status === 'verified');
   if (verified) {
     mfaFactorId = verified.id;
-    $('#mfa-intro').textContent = '請打開手機的驗證 App（Google Authenticator 等），輸入「Sniper 管理後台」的 6 位數。';
+    $('#mfa-intro').textContent = '請打開手機的驗證 App（Google Authenticator 等），輸入「WQW 管理後台」的 6 位數。';
     $('#mfa-qr').innerHTML = '';
     $('#mfa-secret').textContent = '';
   } else {
@@ -129,7 +140,7 @@ async function showMfa() {
     for (const x of f?.all ?? []) {
       if (x.status !== 'verified') await db.auth.mfa.unenroll({ factorId: x.id });
     }
-    const { data: en, error: e2 } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Sniper 管理後台' });
+    const { data: en, error: e2 } = await db.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'WQW 管理後台' });
     if (e2) { $('#login-msg').textContent = errText(e2); return; }
     mfaFactorId = en.id;
     $('#mfa-intro').textContent = '第一次登入要綁定手機：用 Google Authenticator（或其他驗證 App）掃下面的 QR code，再輸入 App 上的 6 位數。之後每次登入都要輸入。';
@@ -158,7 +169,7 @@ $('#mfa-cancel').onclick = async () => { await db.auth.signOut(); location.hash 
 // ---------------------------------------------------------------------
 // 頁面切換
 // ---------------------------------------------------------------------
-const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, feedback, otp, rules, release, ads, push };
+const PAGES = { overview, levels, venues, players, members, lucky, flags, disputes, reports, feedback, otp, rules, release, configlog, roles, store, orders, revenue, ads, push };
 function route() {
   const name = (location.hash.replace('#/', '') || 'overview').split('?')[0];
   document.querySelectorAll('.side a').forEach((a) => a.classList.toggle('active', a.dataset.page === name));
@@ -1391,4 +1402,222 @@ async function release() {
     await run(db.from('app_config').update({ value }).eq('key', 'app_status'), '已儲存');
     release();
   };
+}
+
+// =====================================================================
+// 後台角色、設定修改紀錄、商城、訂單與退款、營收報表（負責人 2026-11-26）
+// =====================================================================
+var MY_ROLE = 'super_admin'; // var：start() 可能在這行執行前就被呼叫
+var ROLE_NAMES = { super_admin: '超級管理員', operator: '營運', finance: '財務', support: '客服' };
+const ROLE_HELP = {
+  super_admin: '全部權限，含指派角色、還原設定',
+  operator: '改設定、功能開關、版本與維護、商城上架',
+  finance: '訂單、退款、補發／收回、營收報表',
+  support: '查會員、檢舉、問題回報（不能改設定、不能碰錢）',
+};
+
+// ---- 角色 ----
+async function roles() {
+  const list = await run(db.rpc('admin_list_roles'));
+  const canEdit = MY_ROLE === 'super_admin';
+  page().innerHTML = `<h1>後台角色</h1>
+    <p class="hint">管理員再分四種角色，「提出」和「核准」盡量給不同人。資料庫會檢查權限，這裡只是設定。
+      要新增管理員，仍然在 Supabase 把 profiles.role 設成 admin（見 CLAUDE.md），預設是超級管理員，再到這裡調整。</p>
+    <table><tr><th>管理員</th><th>會員編號</th><th>角色</th><th>可以做什麼</th></tr>
+      ${list.map((r) => `<tr><td>${esc(r.display_name)}</td><td>${r.member_no ? 'VN ' + r.member_no : '—'}</td>
+        <td>${canEdit ? `<select data-role-user="${r.user_id}" style="width:auto">${Object.keys(ROLE_NAMES).map((k) =>
+          `<option value="${k}" ${k === r.role ? 'selected' : ''}>${ROLE_NAMES[k]}</option>`).join('')}</select>` : esc(ROLE_NAMES[r.role] ?? r.role)}</td>
+        <td class="muted">${esc(ROLE_HELP[r.role] ?? '')}</td></tr>`).join('')}
+    </table>
+    ${canEdit ? '' : '<p class="hint">只有超級管理員能調整角色。</p>'}`;
+  page().querySelectorAll('[data-role-user]').forEach((s) => (s.onchange = async () => {
+    if (!confirm(`把這位管理員改成「${ROLE_NAMES[s.value]}」？`)) { roles(); return; }
+    await run(db.rpc('admin_set_role', { p_user: s.dataset.roleUser, p_role: s.value }), '已更新角色');
+    roles();
+  }));
+}
+
+// ---- 設定修改紀錄 ----
+async function configlog() {
+  const list = await run(db.from('config_changes').select('*, who:profiles!config_changes_changed_by_fkey(display_name)')
+    .order('changed_at', { ascending: false }).limit(200));
+  const pretty = (v) => (v == null ? '（無）' : JSON.stringify(v, null, 2));
+  const canRestore = MY_ROLE === 'super_admin' || MY_ROLE === 'operator';
+  page().innerHTML = `<h1>設定修改紀錄</h1>
+    <p class="hint">積分規則、功能開關、版本與維護等所有設定（app_config）每次修改都記在這裡：誰、什麼時候、改前、改後。按「還原」會改回那一次「改之前」的值（還原本身也會記一筆）。</p>
+    <table><tr><th>時間</th><th>設定</th><th>動作</th><th>誰</th><th>改前 → 改後</th><th></th></tr>
+      ${list.map((c) => `<tr><td>${fmt(c.changed_at)}</td><td><b>${esc(CONFIG_NAMES[c.key] ?? c.key)}</b><br><span class="muted">${esc(c.key)}</span></td>
+        <td>${{ insert: '新增', update: '修改', delete: '刪除', restore: '還原' }[c.action] ?? esc(c.action)}</td>
+        <td>${esc(c.who?.display_name ?? (c.changed_by ? '' : '系統'))}</td>
+        <td><details><summary>看內容</summary><div class="row" style="align-items:flex-start;gap:8px">
+          <pre style="flex:1;white-space:pre-wrap;max-height:300px;overflow:auto">${esc(pretty(c.old_value))}</pre>
+          <pre style="flex:1;white-space:pre-wrap;max-height:300px;overflow:auto">${esc(pretty(c.new_value))}</pre></div></details></td>
+        <td>${c.old_value != null && canRestore ? `<button class="btn small" data-restore="${c.id}">還原</button>` : ''}</td></tr>`).join('') ||
+        '<tr><td colspan="6" class="muted">還沒有修改紀錄</td></tr>'}
+    </table>`;
+  page().querySelectorAll('[data-restore]').forEach((b) => (b.onclick = async () => {
+    if (!confirm('確定把這個設定改回這一次「改之前」的值？')) return;
+    await run(db.rpc('admin_restore_config', { p_change: Number(b.dataset.restore) }), '已還原');
+    configlog();
+  }));
+}
+
+// ---- 商城 ----
+const KIND_NAMES = { cosmetic: '外觀', season_pass: '賽季通行證', subscription: '會員', lucky_no: '吉利號碼', bundle: '組合包' };
+const SLOT_NAMES = { avatar_frame: '頭像框', card_bg: '名片底圖', name_effect: '名字特效', title_effect: '稱號特效', entrance: '進場特效' };
+async function store() {
+  const list = await run(db.from('store_products').select('*').order('sort_order').order('id'));
+  const cfg = (await run(db.from('app_config').select('value').eq('key', 'store').maybeSingle()))?.value ?? {};
+  page().innerHTML = `<h1>商城</h1>
+    <p class="hint">商品目錄。價格是參考價（實際以 Google Play 設定的價格為準），要賣的商品一定要填「Google Play 商品 ID」，並在 Play Console 建同一個 ID。
+      商店開關目前：<b>${cfg.enabled ? '打開' : '關閉（App 看不到商城）'}</b>。只有營運、超級管理員能上架。</p>
+    <div class="actions"><button class="btn gold inline" id="sp-new">新增商品</button>
+      <button class="btn" id="sp-toggle">${cfg.enabled ? '關閉商店' : '打開商店'}</button></div>
+    <table><tr><th>圖</th><th>ID</th><th>名稱</th><th>類型</th><th>價格</th><th>Google Play</th><th>狀態</th><th></th></tr>
+      ${list.map((p) => `<tr><td>${p.asset?.image ? `<img src="${esc(p.asset.image)}" style="width:44px;height:44px;object-fit:contain">` : ''}</td>
+        <td>${esc(p.id)}</td><td>${esc(p.name?.zh || p.name?.vi || '')}<br><span class="muted">${esc(p.name?.vi || '')}</span></td>
+        <td>${esc(KIND_NAMES[p.kind] ?? p.kind)}${p.slot ? '<br><span class="muted">' + esc(SLOT_NAMES[p.slot] ?? p.slot) + '</span>' : ''}</td>
+        <td>${p.price_vnd != null ? vnd(p.price_vnd) : '—'}${p.duration_days ? '<br><span class="muted">' + p.duration_days + ' 天</span>' : ''}</td>
+        <td>${esc(p.store_product_id ?? '—')}</td>
+        <td>${p.active ? '<span class="pill ok">上架</span>' : '<span class="pill">下架</span>'}</td>
+        <td><button class="btn small" data-edit="${esc(p.id)}">編輯</button></td></tr>`).join('') ||
+        '<tr><td colspan="8" class="muted">還沒有商品</td></tr>'}
+    </table><div id="sp-form"></div>`;
+  $('#sp-new').onclick = () => storeForm(null);
+  $('#sp-toggle').onclick = async () => {
+    if (!confirm(cfg.enabled ? '確定關閉商店？App 會看不到商城。' : '確定打開商店？App 會出現商城（要先有上架的商品）。')) return;
+    await run(db.from('app_config').update({ value: { ...cfg, enabled: !cfg.enabled } }).eq('key', 'store'), '已更新');
+    store();
+  };
+  page().querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => storeForm(list.find((p) => p.id === b.dataset.edit))));
+}
+
+function storeForm(p) {
+  const isNew = !p;
+  p = p ?? { kind: 'cosmetic', slot: 'avatar_frame', name: {}, description: {}, asset: {}, active: false, sort_order: 0 };
+  const dt = (v) => (v ? new Date(v).toISOString().slice(0, 16) : '');
+  $('#sp-form').innerHTML = `<h2>${isNew ? '新增商品' : '編輯 ' + esc(p.id)}</h2><div class="form">
+    <label>商品 ID（小寫英數、. _，例如 frame.gold_2027q1；建立後不能改）<input id="f-id" value="${esc(p.id ?? '')}" ${isNew ? '' : 'disabled'}></label>
+    <div class="row"><label style="flex:1">類型<select id="f-kind">${Object.entries(KIND_NAMES).map(([k, v]) => `<option value="${k}" ${k === p.kind ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <label style="flex:1">外觀位置（外觀才需要）<select id="f-slot"><option value="">—</option>${Object.entries(SLOT_NAMES).map(([k, v]) => `<option value="${k}" ${k === p.slot ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div>
+    <div class="row"><label style="flex:1">名稱（越南文）<input id="f-vi" value="${esc(p.name?.vi ?? '')}"></label>
+      <label style="flex:1">名稱（中文）<input id="f-zh" value="${esc(p.name?.zh ?? '')}"></label>
+      <label style="flex:1">名稱（英文）<input id="f-en" value="${esc(p.name?.en ?? '')}"></label></div>
+    <div class="row"><label style="flex:1">參考價（VND）<input id="f-price" type="number" min="0" value="${p.price_vnd ?? ''}"></label>
+      <label style="flex:1">有效天數（空白 = 永久）<input id="f-days" type="number" min="1" value="${p.duration_days ?? ''}"></label>
+      <label style="flex:1">Google Play 商品 ID（空白 = 只能送不能買）<input id="f-gp" value="${esc(p.store_product_id ?? '')}"></label></div>
+    <div class="row"><label style="flex:1">開始販售（空白 = 馬上）<input id="f-start" type="datetime-local" value="${dt(p.starts_at)}"></label>
+      <label style="flex:1">結束販售（空白 = 不結束）<input id="f-end" type="datetime-local" value="${dt(p.ends_at)}"></label>
+      <label style="flex:1">排序（小的在前）<input id="f-sort" type="number" value="${p.sort_order ?? 0}"></label></div>
+    <label>素材圖（PNG／WebP，透明背景；頭像框建議 512×512）<input id="f-img" type="file" accept="image/png,image/webp"></label>
+    ${p.asset?.image ? `<img src="${esc(p.asset.image)}" style="width:96px;height:96px;object-fit:contain;background:#222;border-radius:12px">` : ''}
+    <label class="switch"><input type="checkbox" id="f-active" ${p.active ? 'checked' : ''}><span style="font-size:15px;color:var(--text)">上架（商店打開時 App 看得到）</span></label>
+    <div class="actions"><button class="btn gold inline" id="f-save">儲存</button><button class="btn" id="f-cancel">取消</button></div></div>`;
+  $('#f-cancel').onclick = () => { $('#sp-form').innerHTML = ''; };
+  $('#f-save').onclick = async () => {
+    const id = isNew ? $('#f-id').value.trim() : p.id;
+    if (!/^[a-z0-9][a-z0-9_.]{2,63}$/.test(id)) { toast('商品 ID 格式不對', true); return; }
+    const asset = { ...(p.asset ?? {}) };
+    const file = $('#f-img').files[0];
+    if (file) {
+      const path = 'products/' + id + '-' + Date.now() + (file.type === 'image/webp' ? '.webp' : '.png');
+      await run(db.storage.from('store').upload(path, file, { contentType: file.type }));
+      asset.image = db.storage.from('store').getPublicUrl(path).data.publicUrl;
+    }
+    const num = (v) => (v === '' ? null : Number(v));
+    const row = {
+      id, kind: $('#f-kind').value, slot: $('#f-slot').value || null,
+      name: { vi: $('#f-vi').value.trim(), zh: $('#f-zh').value.trim(), en: $('#f-en').value.trim() },
+      price_vnd: num($('#f-price').value), duration_days: num($('#f-days').value),
+      store_product_id: $('#f-gp').value.trim() || null,
+      starts_at: $('#f-start').value ? new Date($('#f-start').value).toISOString() : null,
+      ends_at: $('#f-end').value ? new Date($('#f-end').value).toISOString() : null,
+      sort_order: Number($('#f-sort').value || 0), active: $('#f-active').checked, asset,
+    };
+    await run(isNew ? db.from('store_products').insert(row) : db.from('store_products').update(row).eq('id', id), '已儲存');
+    store();
+  };
+}
+
+// ---- 訂單與退款 ----
+const ORDER_STATUS = {
+  verified: ['成功', 'ok'], pending: ['處理中', 'warn'], refunded: ['已退款', 'warn'],
+  cancelled: ['已取消', ''], expired: ['已到期', ''], failed: ['失敗', ''],
+};
+const orderPill = (s) => (ORDER_STATUS[s] ? `<span class="pill ${ORDER_STATUS[s][1]}">${ORDER_STATUS[s][0]}</span>` : esc(s));
+async function orders() {
+  const want = new URLSearchParams(location.hash.split('?')[1]).get('status') || '';
+  const list = await run(db.rpc('admin_store_orders', { p_status: want || null, p_limit: 300 }));
+  page().innerHTML = `<h1>訂單與退款</h1>
+    <p class="hint">Google Play 的購買紀錄。退款由 Google 處理（使用者向 Google 申請，或在 Play Console 退款），退款後系統會自動收回東西。
+      這裡可以手動補發（例如付了錢沒拿到、活動贈送）或收回。只有財務、超級管理員看得到。</p>
+    <div class="actions">${['', 'verified', 'pending', 'refunded', 'cancelled', 'expired', 'failed'].map((s) =>
+      `<a class="btn small ${s === want ? 'gold' : ''}" href="#/orders${s ? '?status=' + s : ''}">${s ? ORDER_STATUS[s][0] : '全部'}</a>`).join('')}</div>
+    <table><tr><th>時間</th><th>會員</th><th>商品</th><th>價格</th><th>Google 訂單</th><th>狀態</th><th></th></tr>
+      ${list.map((o) => `<tr><td>${fmt(o.created_at)}</td>
+        <td>${esc(o.display_name ?? '（已刪除）')}${o.member_no ? '<br><span class="muted">VN ' + o.member_no + '</span>' : ''}</td>
+        <td>${esc(o.product_name?.zh || o.product_name?.vi || o.product_id)}<br><span class="muted">${esc(o.product_id)}</span></td>
+        <td>${o.price_vnd != null ? vnd(o.price_vnd) : '—'}</td><td class="muted">${esc(o.order_id ?? '')}</td>
+        <td>${orderPill(o.status)}${o.item_revoked ? '<br><span class="muted">東西已收回</span>' : ''}</td>
+        <td>${o.item_id && !o.item_revoked ? `<button class="btn small danger" data-revoke="${o.item_id}">收回</button>` : ''}</td></tr>`).join('') ||
+        '<tr><td colspan="7" class="muted">沒有訂單</td></tr>'}
+    </table>
+    <h2>手動補發</h2>
+    <div class="form"><div class="row">
+      <label style="flex:1">會員編號（VN482915）<input id="g-sn"></label>
+      <label style="flex:1">商品 ID<input id="g-product"></label>
+      <label style="flex:1">有效天數（空白 = 照商品設定）<input id="g-days" type="number" min="1"></label></div>
+      <label>原因（必填，會記錄）<input id="g-note"></label>
+      <div><button class="btn gold inline" id="g-go">補發</button></div></div>`;
+  page().querySelectorAll('[data-revoke]').forEach((b) => (b.onclick = async () => {
+    const note = prompt('收回原因（必填）');
+    if (!note) return;
+    await run(db.rpc('admin_revoke_item', { p_item: Number(b.dataset.revoke), p_note: note }), '已收回');
+    orders();
+  }));
+  $('#g-go').onclick = async () => {
+    const sn = parseSN($('#g-sn').value);
+    const product = $('#g-product').value.trim();
+    const note = $('#g-note').value.trim();
+    if (!sn || !product || !note) { toast('會員編號、商品 ID、原因都要填', true); return; }
+    const hit = await run(db.rpc('find_player_by_member_no', { p_text: sn }));
+    if (!hit.length) { toast('找不到這個會員編號', true); return; }
+    if (!confirm(`補發「${product}」給 ${hit[0].display_name}（VN ${sn}）？`)) return;
+    const days = $('#g-days').value ? Number($('#g-days').value) : null;
+    await run(db.rpc('admin_grant_item', { p_user: hit[0].id, p_product: product, p_days: days, p_note: note }), '已補發');
+    orders();
+  };
+}
+
+// ---- 營收報表 ----
+async function revenue() {
+  const days = Number(new URLSearchParams(location.hash.split('?')[1]).get('days') || 30);
+  const r = await run(db.rpc('admin_store_revenue', { p_days: days }));
+  const t = r.total ?? {};
+  const max = Math.max(1, ...r.daily.map((d) => d.revenue));
+  const f = r.funnel ?? {};
+  const step = (k, label) => `<div class="card"><div class="num">${f[k]?.users ?? 0}</div><div class="label">${label}（${f[k]?.n ?? 0} 次）</div></div>`;
+  page().innerHTML = `<h1>營收報表</h1>
+    <p class="hint">金額用商品參考價估算，實際入帳以 Google Play 帳單為準（Google 抽 15%）。只有財務、超級管理員看得到。</p>
+    <div class="actions">${[7, 30, 90, 365].map((d) => `<a class="btn small ${d === days ? 'gold' : ''}" href="#/revenue?days=${d}">近 ${d} 天</a>`).join('')}</div>
+    <div class="cards">
+      <div class="card"><div class="num">${vnd(t.revenue ?? 0)}</div><div class="label">營收（估）</div></div>
+      <div class="card"><div class="num">${t.orders ?? 0}</div><div class="label">成功訂單</div></div>
+      <div class="card"><div class="num">${t.buyers ?? 0}</div><div class="label">付費會員</div></div>
+      <div class="card"><div class="num">${t.buyers ? vnd(Math.round((t.revenue ?? 0) / t.buyers)) : '—'}</div><div class="label">平均每位付費會員</div></div>
+      <div class="card alert"><div class="num">${t.refunds ?? 0}</div><div class="label">退款（${vnd(t.refunded ?? 0)}）</div></div>
+    </div>
+    <h2>商城漏斗（人數）</h2>
+    <div class="cards">${step('view_store', '看商城')}${step('view_product', '看商品')}${step('tap_buy', '按購買')}${step('purchase_ok', '購買成功')}${step('purchase_cancel', '取消')}</div>
+    <h2>熱賣商品</h2>
+    <table><tr><th>商品</th><th>訂單</th><th>營收（估）</th></tr>
+      ${r.top.map((p) => `<tr><td>${esc(p.name?.zh || p.name?.vi || p.product_id)}<br><span class="muted">${esc(p.product_id)}</span></td><td>${p.orders}</td><td>${vnd(p.revenue)}</td></tr>`).join('') ||
+        '<tr><td colspan="3" class="muted">還沒有銷售</td></tr>'}
+    </table>
+    <h2>每天</h2>
+    <table><tr><th>日期</th><th>營收（估）</th><th></th><th>訂單</th><th>買家</th><th>退款</th></tr>
+      ${r.daily.slice().reverse().map((d) => `<tr><td>${esc(d.day)}</td><td>${vnd(d.revenue)}</td>
+        <td style="width:40%"><div style="height:8px;border-radius:4px;background:var(--gold);width:${Math.round((d.revenue / max) * 100)}%"></div></td>
+        <td>${d.orders}</td><td>${d.buyers}</td><td>${d.refunds ? d.refunds + '（' + vnd(d.refunded) + '）' : ''}</td></tr>`).join('')}
+    </table>`;
 }
