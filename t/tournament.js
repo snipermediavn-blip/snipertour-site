@@ -100,7 +100,7 @@
     inner.appendChild(btn);
     const store = el('a', 'store');
     store.appendChild(document.createTextNode('Chưa có ứng dụng? '));
-    store.appendChild(el('u', null, 'Tải Sniper Billiards trên Google Play'));
+    store.appendChild(el('u', null, 'Tải WQW trên Google Play'));
     store.href = STORE_URL;
     store.rel = 'noopener';
     inner.appendChild(store);
@@ -122,7 +122,7 @@
   }
 
   function notFound() {
-    document.title = 'Không tìm thấy giải đấu · Sniper Billiards';
+    document.title = 'Không tìm thấy giải đấu · WQW';
     emptyState('not-found', 'search', 'Không tìm thấy giải đấu', 'Giải đấu này không tồn tại hoặc chưa được công khai.');
     app.appendChild(dock('Xem giải đấu khác', appLink('/t'), true));
   }
@@ -173,7 +173,7 @@
     const venue = t.venue || {};
     const placeName = t.location_name || venue.name || '';
     const placeAddr = (t.location_name ? t.location_address : venue.address) || '';
-    document.title = t.name + ' · Sniper Billiards';
+    document.title = t.name + ' · WQW';
     app.replaceChildren();
 
     // 封面＋頂列
@@ -193,7 +193,7 @@
     logo.src = '/brand/icon_512.png';
     logo.alt = '';
     top.appendChild(logo);
-    const word = el('a', 'word', 'SNIPER');
+    const word = el('a', 'word', 'WQW');
     word.href = '/';
     top.appendChild(word);
     const open = el('a', 'open-app', 'Mở ứng dụng');
@@ -305,13 +305,13 @@
     pi.alt = '';
     promo.appendChild(pi);
     const pt = el('div');
-    pt.appendChild(el('b', null, 'Sniper Billiards'));
+    pt.appendChild(el('b', null, 'WQW'));
     pt.appendChild(el('span', null, 'Đăng ký giải, xem bảng đấu trực tiếp, tích điểm và lên hạng.'));
     promo.appendChild(pt);
     app.appendChild(promo);
 
     if (st.open) {
-      app.appendChild(el('p', 'note', 'Đăng ký và thanh toán trong ứng dụng Sniper Billiards.'));
+      app.appendChild(el('p', 'note', 'Đăng ký và thanh toán trong ứng dụng WQW.'));
       app.appendChild(dock(full ? 'Xem giải đấu trong ứng dụng' : 'Đăng ký trong ứng dụng', appLink('/t/' + t.id), false));
     } else {
       app.appendChild(el('p', 'note', t.status === 'registration'
