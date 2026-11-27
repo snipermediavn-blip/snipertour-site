@@ -1137,6 +1137,15 @@ async function rules() {
 const SLOTS = { home_hero: '首頁大圖輪播（16:9）', home_banner: '首頁橫幅', ranking_banner: '排行榜橫幅', splash: '開啟畫面' };
 // 各位置建議的圖片尺寸
 const SLOT_SIZE = { home_hero: '建議 1920×1080（16:9）', home_banner: '建議 1600×600', ranking_banner: '建議 1600×600', splash: '建議 1080×1920 直式（9:16），重點放中間，上下左右可能被裁一點' };
+// 各位置在 App 裡的哪裡（負責人 2026-11-28：後台要標示廣告位置；圖在 website/admin/ad-slots/，
+// 用 tools/store_screenshots/run_ad_slots.sh 產生，App 畫面改了要重新產生）
+const SLOT_INFO = {
+  splash: { where: '每次打開 App，開機動畫後全螢幕顯示 3 秒（右上角可以跳過）', many: '一次只顯示一則（最新上架的）', tip: '重點放中間，不同手機上下左右可能被裁一點' },
+  home_hero: { where: '首頁最上面的大圖，和原本的大圖每 5 秒輪流', many: '可以放好幾則，輪流播放（最多 5 則）', tip: '下方會變暗、上下可能被裁一點，文字和 Logo 放中間' },
+  home_banner: { where: '首頁中間，「精選賽事」下面', many: '一次只顯示一則（最新上架的）', tip: '會跟著頁面捲動，不是浮動的' },
+  ranking_banner: { where: '積分榜，前三名頒獎台正下方（球員最常看的頁面）', many: '一次只顯示一則（最新上架的）', tip: '會跟著頁面捲動，不是浮動的' },
+};
+const slotImg = (k) => 'ad-slots/' + k + '.jpg';
 const localInput = (d) => (d ? new Date(new Date(d).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
 async function ads() {
   const [list, stats, venueList] = await Promise.all([
@@ -1145,7 +1154,21 @@ async function ads() {
     run(db.from('venues').select('id, name').order('name')),
   ]);
   const st = Object.fromEntries(stats.map((s) => [s.ad_id, s]));
+  const live = (k) => list.filter((a) => a.slot === k && a.active).length;
   page().innerHTML = `<h1>廣告</h1>
+    <h2>廣告位置</h2>
+    <p class="hint">App 裡一共 4 個廣告位。紅框是廣告出現的地方，點圖可以放大。沒有廣告時，那個位置會自動隱藏。</p>
+    <div class="slot-grid">
+      ${Object.keys(SLOTS).map((k) => `<div class="slot-card">
+        <a href="${slotImg(k)}" target="_blank" rel="noopener"><img src="${slotImg(k)}" alt="${esc(SLOTS[k])}"></a>
+        <div><b>${esc(SLOTS[k])}</b> ${live(k) ? `<span class="pill ok">上架中 ${live(k)} 則</span>` : '<span class="pill">沒有廣告</span>'}</div>
+        <div class="hint">${esc(SLOT_INFO[k].where)}</div>
+        <div class="hint">尺寸：${esc(SLOT_SIZE[k])}</div>
+        <div class="hint">放好幾則：${esc(SLOT_INFO[k].many)}</div>
+        <div class="hint">${esc(SLOT_INFO[k].tip)}</div>
+      </div>`).join('')}
+    </div>
+    <h2>已上傳的廣告</h2>
     <table><tr><th>圖片</th><th>位置</th><th>期間</th><th>曝光／點擊</th><th>狀態</th><th></th></tr>
       ${list.map((a) => `<tr><td><img class="thumb" src="${esc(a.image_url)}" alt=""></td>
         <td>${esc(SLOTS[a.slot] ?? a.slot)}<div class="hint">${a.venue_ids?.length ? a.venue_ids.length + ' 家球館' : '全部球館'}</div>
@@ -1158,7 +1181,8 @@ async function ads() {
         '<tr><td colspan="6" class="muted">還沒有廣告</td></tr>'}
     </table>
     <h2>新增廣告</h2>
-    <div class="form">
+    <div class="form slot-form">
+      <img id="a-preview" class="slot-preview" src="${slotImg('home_hero')}" alt="廣告位置">
       <div class="row">
         <div><label>位置</label><select id="a-slot">${Object.entries(SLOTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
         <div><label>圖片（<span id="a-size">${SLOT_SIZE.home_hero}</span>，2 MB 以內）</label><input id="a-img" type="file" accept="image/png,image/jpeg,image/webp"></div>
@@ -1172,7 +1196,11 @@ async function ads() {
         <div class="row">${venueList.map((v) => `<label class="switch"><input type="checkbox" class="a-venue" value="${v.id}"><span style="color:var(--text)">${esc(v.name)}</span></label>`).join('')}</div></div>
       <div><button class="btn gold inline" id="a-save">上傳並上架</button></div>
     </div>`;
-  $('#a-slot').onchange = () => ($('#a-size').textContent = SLOT_SIZE[$('#a-slot').value] ?? '');
+  $('#a-slot').onchange = () => {
+    const k = $('#a-slot').value;
+    $('#a-size').textContent = SLOT_SIZE[k] ?? '';
+    $('#a-preview').src = slotImg(k);
+  };
   page().querySelectorAll('[data-toggle]').forEach((b) => (b.onclick = async () => {
     await run(db.from('ads').update({ active: b.dataset.on !== 'true' }).eq('id', b.dataset.toggle), '已更新');
     ads();

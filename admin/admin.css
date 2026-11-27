@@ -86,3 +86,11 @@ tr:last-child td { border-bottom: none; }
 /* 四張圖 2 × 2，窄螢幕一欄 */
 .schart-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 @media (max-width: 900px) { .schart-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* 廣告位置（2026-11-28） */
+.slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.slot-card { background: var(--highest); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.slot-card img { width: 100%; aspect-ratio: 1 / 2; object-fit: cover; object-position: top; border-radius: 8px; border: 1px solid var(--line); }
+.slot-form { position: relative; padding-right: 196px; min-height: 360px; }
+.slot-preview { position: absolute; right: 16px; top: 16px; width: 160px; aspect-ratio: 1 / 2; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
+@media (max-width: 720px) { .slot-form { padding-right: 0; } .slot-preview { position: static; width: 140px; } }
