@@ -1146,6 +1146,21 @@ const SLOT_INFO = {
   ranking_banner: { where: '積分榜，前三名頒獎台正下方（球員最常看的頁面）', many: '一次只顯示一則（最新上架的）', tip: '會跟著頁面捲動，不是浮動的' },
 };
 const slotImg = (k) => 'ad-slots/' + k + '.jpg';
+// 影片廣告（2026-11-28）：MP4、15 MB、30 秒以內；App 自動靜音播放（開啟畫面最多 10 秒）。圖片一定要有，當封面
+const VIDEO_MAX_MB = 15, VIDEO_MAX_SEC = 30;
+// 讀影片長度（秒）；讀不到回 null
+function videoSeconds(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    const url = URL.createObjectURL(file);
+    const done = (x) => { URL.revokeObjectURL(url); resolve(x); };
+    v.preload = 'metadata';
+    v.onloadedmetadata = () => done(Number.isFinite(v.duration) ? Math.round(v.duration * 10) / 10 : null);
+    v.onerror = () => done(null);
+    setTimeout(() => done(null), 10000);
+    v.src = url;
+  });
+}
 const localInput = (d) => (d ? new Date(new Date(d).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
 async function ads() {
   const [list, stats, venueList] = await Promise.all([
@@ -1171,7 +1186,7 @@ async function ads() {
     <h2>已上傳的廣告</h2>
     <table><tr><th>圖片</th><th>位置</th><th>期間</th><th>曝光／點擊</th><th>狀態</th><th></th></tr>
       ${list.map((a) => `<tr><td><img class="thumb" src="${esc(a.image_url)}" alt=""></td>
-        <td>${esc(SLOTS[a.slot] ?? a.slot)}<div class="hint">${a.venue_ids?.length ? a.venue_ids.length + ' 家球館' : '全部球館'}</div>
+        <td>${esc(SLOTS[a.slot] ?? a.slot)}${a.video_url ? ` <span class="pill warn">影片 ${a.video_seconds ?? '?'} 秒</span>` : ''}<div class="hint">${a.venue_ids?.length ? a.venue_ids.length + ' 家球館' : '全部球館'}</div>
           ${a.link && /^(https?:\/\/|\/tournament\/)/.test(a.link) ? `<div class="hint"><a href="${esc(a.link)}" target="_blank" rel="noopener noreferrer">連結</a></div>` : ''}</td>
         <td class="hint">${fmt(a.starts_at)}<br>到 ${fmt(a.ends_at)}</td>
         <td>${st[a.id]?.impressions ?? 0} ／ ${st[a.id]?.clicks ?? 0}<div class="hint">${st[a.id]?.viewers ?? 0} 人看過</div></td>
@@ -1187,6 +1202,9 @@ async function ads() {
         <div><label>位置</label><select id="a-slot">${Object.entries(SLOTS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
         <div><label>圖片（<span id="a-size">${SLOT_SIZE.home_hero}</span>，2 MB 以內）</label><input id="a-img" type="file" accept="image/png,image/jpeg,image/webp"></div>
       </div>
+      <div><label>影片（選填；MP4，${VIDEO_MAX_MB} MB、${VIDEO_MAX_SEC} 秒以內，尺寸和圖片一樣）</label><input id="a-video" type="file" accept="video/mp4">
+        <div class="hint">有影片時：App 一出現就<b>自動靜音播放</b>（右下角可以開聲音），上面的圖片當封面（影片還沒載好、網路太慢時顯示）。
+          開啟畫面最多播 10 秒；首頁大圖輪播會播完才換下一張。影片會用掉使用者的流量，建議 10 秒、5 MB 左右。</div></div>
       <div><label>點了要開的網址（可以空白）</label><input id="a-link" placeholder="https://… 或 App 內頁面 /tournament/比賽ID"><div class="hint">https:// 開頭會開瀏覽器；/ 開頭會開 App 內的頁面（例如某場比賽）</div></div>
       <div class="row">
         <div><label>開始時間（空白 = 馬上）</label><input id="a-start" type="datetime-local"></div>
@@ -1214,14 +1232,32 @@ async function ads() {
     const file = $('#a-img').files[0];
     if (!file) return toast('請選擇圖片', true);
     if (file.size > 2 * 1024 * 1024) return toast('圖片超過 2 MB', true);
+    const video = $('#a-video').files[0];
+    let seconds = null;
+    if (video) {
+      if (video.type !== 'video/mp4') return toast('影片要是 MP4', true);
+      if (video.size > VIDEO_MAX_MB * 1024 * 1024) return toast('影片超過 ' + VIDEO_MAX_MB + ' MB', true);
+      seconds = await videoSeconds(video);
+      if (seconds === null) return toast('讀不到影片長度，請換一個 MP4（H.264）檔', true);
+      if (seconds > VIDEO_MAX_SEC) return toast('影片超過 ' + VIDEO_MAX_SEC + ' 秒（現在 ' + seconds + ' 秒）', true);
+      seconds = Math.max(1, seconds);
+    }
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = crypto.randomUUID() + '.' + ext;
     await run(db.storage.from('ads').upload(path, file, { contentType: file.type }));
     const url = db.storage.from('ads').getPublicUrl(path).data.publicUrl;
+    let videoUrl = null;
+    if (video) {
+      const vpath = crypto.randomUUID() + '/video.mp4';
+      await run(db.storage.from('ads').upload(vpath, video, { contentType: 'video/mp4' }));
+      videoUrl = db.storage.from('ads').getPublicUrl(vpath).data.publicUrl;
+    }
     const venuesChecked = [...document.querySelectorAll('.a-venue:checked')].map((c) => c.value);
     await run(db.from('ads').insert({
       slot: $('#a-slot').value,
       image_url: url,
+      video_url: videoUrl,
+      video_seconds: seconds,
       link: $('#a-link').value.trim() || null,
       starts_at: $('#a-start').value ? new Date($('#a-start').value).toISOString() : null,
       ends_at: $('#a-end').value ? new Date($('#a-end').value).toISOString() : null,

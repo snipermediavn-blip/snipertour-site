@@ -8,7 +8,14 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
 
 /admin/*
-  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js https://challenges.cloudflare.com; connect-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co wss://zcvtqzjgmhsstbyzvuyo.supabase.co https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co data: blob:; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js https://challenges.cloudflare.com; connect-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co wss://zcvtqzjgmhsstbyzvuyo.supabase.co https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; media-src blob:; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co data: blob:; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Cache-Control: no-store
+
+# 網頁版刪除帳號（Google Play 規定）
+/delete-account/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js https://challenges.cloudflare.com; connect-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; img-src 'self' https://zcvtqzjgmhsstbyzvuyo.supabase.co data:; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'none'
   X-Frame-Options: DENY
   Referrer-Policy: no-referrer
   Cache-Control: no-store
