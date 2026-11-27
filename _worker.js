@@ -15,7 +15,7 @@ const SUPABASE_KEY = 'sb_publishable_avakZ2zeH7B5qfeaGYctCQ_Hkps52Lm'; // 公開
 const SITE = 'https://snipertour.com';
 const DEFAULT_IMAGE = { url: SITE + '/brand/cover.png', w: 1600, h: 900, type: 'image/png' };
 const TZ = 'Asia/Ho_Chi_Minh';
-const COLUMNS = 'id,name,discipline,format,race_to,status,max_players,entry_fee,registration_closes_at,starts_at,' +
+const COLUMNS = 'id,name,discipline,format,race_to,status,max_players,entry_fee,registration_closes_at,starts_at,days,' +
   'prize_total,prize_list,cover_url,location_name,location_address,venue:venues(name,address),registrations(count)';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DISCIPLINE = { '8ball': '8 bi', '9ball': '9 bi', '10ball': '10 bi' };
@@ -141,7 +141,15 @@ async function template(context) {
 
 function describe(t) {
   const parts = [];
-  if (t.starts_at) parts.push(when(t.starts_at));
+  if (t.starts_at) {
+    // 好幾天的比賽（2026-11-27）：「18:30 02/12/2026 – 04/12/2026」
+    const days = Number(t.days) > 1 ? Number(t.days) : 1;
+    const end = days > 1
+      ? ' – ' + new Intl.DateTimeFormat('vi-VN', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' })
+        .format(new Date(Date.parse(t.starts_at) + (days - 1) * 86400000))
+      : '';
+    parts.push(when(t.starts_at) + end);
+  }
   const place = t.location_name || (t.venue && t.venue.name);
   if (place) parts.push(place);
   parts.push([DISCIPLINE[t.discipline] || t.discipline, 'chạm ' + t.race_to].join(' · '));

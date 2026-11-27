@@ -56,19 +56,58 @@ function e164(raw) {
   return '+' + d;
 }
 let loginPhone = null;
+
+// 人機驗證（Cloudflare Turnstile，2026-11-27）：密碼登入、送驗證碼前先拿 token，Supabase Auth 在伺服器端驗證。
+// 網站金鑰在 app_config.captcha.site_key（公開）；空白 = 不驗證。平常看不到，Cloudflare 覺得可疑才出現勾選框。
+const captcha = { key: null, id: null, token: null, waiters: [] };
+async function initCaptcha() {
+  const { data } = await db.from('app_config').select('value').eq('key', 'captcha').maybeSingle();
+  const key = String(data?.value?.site_key ?? '').trim();
+  if (!key) return;
+  captcha.key = key;
+  window.onTurnstileReady = () => {
+    captcha.id = window.turnstile.render('#login-captcha', {
+      sitekey: key, theme: 'dark', language: 'zh-tw', appearance: 'interaction-only', 'refresh-expired': 'auto',
+      callback: (t) => { captcha.token = t; captcha.waiters.splice(0).forEach((r) => r(t)); },
+      'expired-callback': () => { captcha.token = null; },
+    });
+  };
+  const s = document.createElement('script');
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileReady&render=explicit';
+  s.async = true;
+  document.head.appendChild(s);
+}
+// 這次要用的 token（只能用一次，用完馬上重拿）；沒設定 → undefined；25 秒拿不到 → null
+async function captchaToken() {
+  if (!captcha.key) return undefined;
+  let t = captcha.token;
+  if (!t) t = await Promise.race([new Promise((r) => captcha.waiters.push(r)), new Promise((r) => setTimeout(() => r(null), 25000))]);
+  captcha.token = null;
+  if (captcha.id !== null) window.turnstile.reset(captcha.id);
+  return t;
+}
+initCaptcha().catch(() => {});
+const CAPTCHA_FAIL = '人機驗證沒有通過，請再試一次（或重新整理頁面）';
+const isCaptchaError = (e) => e?.code === 'captcha_failed' || /captcha/i.test(e?.message ?? '');
 // 手機號碼＋密碼（不花錢）；驗證碼每則要錢，只在忘記密碼或還沒設密碼時用（登入後到 App 的「設定」設密碼）
 $('#login-pw').onclick = async () => {
   $('#login-msg').textContent = '';
-  const { error } = await db.auth.signInWithPassword({ phone: e164($('#login-phone').value), password: $('#login-password').value });
-  if (error) { $('#login-msg').textContent = '手機號碼或密碼錯誤'; return; }
+  const captchaTok = await captchaToken();
+  if (captchaTok === null) { $('#login-msg').textContent = CAPTCHA_FAIL; return; }
+  const { error } = await db.auth.signInWithPassword({
+    phone: e164($('#login-phone').value), password: $('#login-password').value, options: { captchaToken: captchaTok },
+  });
+  if (error) { $('#login-msg').textContent = isCaptchaError(error) ? CAPTCHA_FAIL : '手機號碼或密碼錯誤'; return; }
   await start();
 };
 $('#login-password').onkeydown = (e) => { if (e.key === 'Enter') $('#login-pw').click(); };
 $('#login-send').onclick = async () => {
   const phone = e164($('#login-phone').value);
   $('#login-msg').textContent = '';
-  const { error } = await db.auth.signInWithOtp({ phone });
-  if (error) { $('#login-msg').textContent = '傳送失敗：' + error.message; return; }
+  const captchaTok = await captchaToken();
+  if (captchaTok === null) { $('#login-msg').textContent = CAPTCHA_FAIL; return; }
+  const { error } = await db.auth.signInWithOtp({ phone, options: { captchaToken: captchaTok } });
+  if (error) { $('#login-msg').textContent = isCaptchaError(error) ? CAPTCHA_FAIL : '傳送失敗：' + error.message; return; }
   loginPhone = phone;
   $('#login-phone-step').classList.add('hidden');
   $('#login-code-step').classList.remove('hidden');

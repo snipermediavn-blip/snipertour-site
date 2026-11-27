@@ -11,7 +11,7 @@
   const STORE_URL = 'https://play.google.com/store/apps/details?id=' + PACKAGE;
   const SITE = 'snipertour.com';
   const TZ = 'Asia/Ho_Chi_Minh';
-  const COLUMNS = 'id,name,discipline,format,race_to,status,max_players,entry_fee,registration_closes_at,starts_at,' +
+  const COLUMNS = 'id,name,discipline,format,race_to,status,max_players,entry_fee,registration_closes_at,starts_at,days,' +
     'prize_total,prize_list,cover_url,location_name,location_address,venue:venues(name,address),registrations(count)';
 
   const DISCIPLINE = { '8ball': '8 bi', '9ball': '9 bi', '10ball': '10 bi' };
@@ -225,7 +225,10 @@
       stats.appendChild(s);
     }
     const sp = t.starts_at ? vnParts(t.starts_at) : null;
-    stat('Ngày thi đấu', sp ? sp.day : '—');
+    // 好幾天的比賽（2026-11-27）：「02/12 – 04/12」
+    const days = Number(t.days) > 1 ? Number(t.days) : 1;
+    const ep = sp && days > 1 ? vnParts(new Date(Date.parse(t.starts_at) + (days - 1) * 86400000).toISOString()) : null;
+    stat('Ngày thi đấu', sp ? (ep ? sp.day + ' – ' + ep.day : sp.day) : '—');
     stat('Giờ bắt đầu', sp ? sp.time : '—');
     let bar = null;
     if (t.max_players) {
@@ -255,7 +258,8 @@
           const r = top3[i];
           const pl = el('div', 'place');
           pl.appendChild(el('div', 'medal', String(i + 1)));
-          pl.appendChild(el('div', 'n', name));
+          // 第三名兩位（同一輪淘汰名次一樣）
+          pl.appendChild(el('div', 'n', i === 2 && r && (r.to || r.from) >= 4 ? 'Hạng 3 (2 người)' : name));
           pl.appendChild(el('div', 'a num', r && r.amount > 0 ? shortMoney(r.amount) : '—'));
           if (r && r.gift) pl.appendChild(el('div', 'g', '+ ' + r.gift));
           podium.appendChild(pl);
